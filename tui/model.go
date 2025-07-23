@@ -14,6 +14,9 @@ const (
 type mockItem struct {
 	title       string
 	description string
+	status      string
+	delay       string
+	jsonFile    string
 }
 
 func (m mockItem) Title() string       { return m.title }

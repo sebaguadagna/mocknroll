@@ -5,6 +5,7 @@ import (
 )
 
 func (m model) Init() tea.Cmd {
+	m.list.SetSize(120, 30)
 	return nil
 }
 
@@ -56,6 +57,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					newItem := mockItem{
 						title:       m.formMethod + " " + m.formPath,
 						description: "Status: " + m.formStatus + ", Delay: " + m.formDelay + "ms",
+						status:      m.formStatus,
+						delay:       m.formDelay,
+						jsonFile:    m.formJSONFile,
 					}
 					m.list.InsertItem(len(m.list.Items()), newItem)
 

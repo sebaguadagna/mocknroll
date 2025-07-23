@@ -8,10 +8,17 @@ import (
 )
 
 var (
-	titleStyle   = lipgloss.NewStyle().Bold(true).Underline(true)
-	borderStyle  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2)
-	sectionStyle = lipgloss.NewStyle().Margin(1, 2, 1, 2)
-	columnGap    = 2
+	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	borderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
+	rightBox    = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).Padding(1, 2)
+	columnGap   = 2
+
+	methodColor = map[string]string{
+		"GET":    "10", // verde
+		"POST":   "13", // magenta
+		"PUT":    "11", // amarillo
+		"DELETE": "9",  // rojo
+	}
 )
 
 func (m model) View() string {
@@ -37,32 +44,39 @@ func (m model) View() string {
 			value = m.formJSONFile
 		}
 		return fmt.Sprintf(
-			"\n📝 Creando nuevo mock...\n\n%s: %s\n\n(Escribí y presioná Enter para continuar)\n[Esc: cancelar]",
+			"\n📝 Creating new mock...\n\n%s: %s\n\n(Type and press Enter to continue)\n[Esc: cancel]",
 			label, value,
 		)
 	}
 
-	// Parte izquierda: lista
-	listTitle := titleStyle.Render(m.list.Title)
-	listWithTitle := listTitle + "\n\n" + m.list.View()
-	left := borderStyle.Render(listWithTitle)
+	// Parte izquierda: lista con título
+	left := borderStyle.Render(m.list.View())
 
 	// Parte derecha: detalle
 	selected, ok := m.list.SelectedItem().(mockItem)
 	var detailView string
 	if ok {
+		method := m.formMethodIfEmpty(selected)
+		path := m.formPathIfEmpty(selected)
+		color := methodColor[method]
+		if color == "" {
+			color = "7"
+		}
+
+		coloredMethod := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(method)
+
 		detailView = fmt.Sprintf(
-			"Path:       %s\nMethod:     %s\nStatus:     %s\nDelay:      %s ms\nJSON File:  %s\n",
-			m.formPathIfEmpty(selected),
-			m.formMethodIfEmpty(selected),
-			m.formStatus,
-			m.formDelay,
-			m.formJSONFile,
+			"🔍 Details\n\nPath:       %s\nMethod:     %s\nStatus:     %s\nDelay:      %s ms\nJSON File:  %s\n",
+			path,
+			coloredMethod,
+			selected.status,
+			selected.delay,
+			selected.jsonFile,
 		)
 	} else {
 		detailView = "Seleccioná un mock para ver detalles"
 	}
-	right := borderStyle.Render(sectionStyle.Render(detailView))
+	right := rightBox.Render(detailView)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", columnGap), right)
 }
