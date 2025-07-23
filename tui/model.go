@@ -4,6 +4,13 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 )
 
+type mode int
+
+const (
+	listMode mode = iota //0
+	formMode             //1
+)
+
 type mockItem struct {
 	title       string
 	description string
@@ -14,7 +21,14 @@ func (m mockItem) Description() string { return m.description }
 func (m mockItem) FilterValue() string { return m.title }
 
 type model struct {
-	list list.Model
+	list         list.Model
+	currentMode  mode
+	formStep     int
+	formPath     string
+	formMethod   string
+	formStatus   string
+	formDelay    string
+	formJSONFile string
 }
 
 func initialModel() model {
@@ -23,8 +37,12 @@ func initialModel() model {
 		mockItem{title: "POST /api/v1/orders", description: "Creates an order"},
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	l := list.New(items, list.NewDefaultDelegate(), 30, 10) // valores temporales visibles
 	l.Title = "Mocks loaded"
 
-	return model{list: l}
+	return model{
+		list:        l,
+		currentMode: listMode,
+		formStep:    0,
+	}
 }
