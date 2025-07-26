@@ -61,13 +61,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						delay:       m.formDelay,
 						jsonFile:    m.formJSONFile,
 					}
-					m.list.InsertItem(len(m.list.Items()), newItem)
+					cmd = tea.Batch(cmd, m.list.InsertItem(len(m.list.Items()), newItem))
 
 					// Reset
 					m.currentMode = listMode
 					m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
 					m.formStep = 0
-					return m, nil
+					return m, cmd
 				}
 			case tea.KeyBackspace:
 				// Permitir borrar carácter
