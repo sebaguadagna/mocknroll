@@ -4,6 +4,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// Constantes para los pasos del formulario
+const (
+	formStepPath = iota
+	formStepMethod
+	formStepStatus
+	formStepDelay
+	formStepJSONFile
+)
+
 func (m model) Init() tea.Cmd {
 	m.list.SetSize(120, 30)
 	return nil
@@ -29,7 +38,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "a":
 				m.currentMode = formMode
-				m.formStep = 0
+				m.formStep = formStepPath
 				return m, nil
 
 			}
@@ -40,19 +49,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyEsc:
 				m.currentMode = listMode
 				m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
-				m.formStep = 0
+				m.formStep = formStepPath
 				return m, nil
 			case tea.KeyEnter:
 				switch m.formStep {
-				case 0:
-					m.formStep++
-				case 1:
-					m.formStep++
-				case 2:
-					m.formStep++
-				case 3:
-					m.formStep++
-				case 4:
+				case formStepPath:
+					m.formStep = formStepMethod
+				case formStepMethod:
+					m.formStep = formStepStatus
+				case formStepStatus:
+					m.formStep = formStepDelay
+				case formStepDelay:
+					m.formStep = formStepJSONFile
+				case formStepJSONFile:
 					// Crear nuevo mockItem
 					newItem := mockItem{
 						title:       m.formMethod + " " + m.formPath,
@@ -66,29 +75,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Reset
 					m.currentMode = listMode
 					m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
-					m.formStep = 0
+					m.formStep = formStepPath
 					return m, cmd
 				}
 			case tea.KeyBackspace:
 				// Permitir borrar carácter
 				switch m.formStep {
-				case 0:
+				case formStepPath:
 					if len(m.formPath) > 0 {
 						m.formPath = m.formPath[:len(m.formPath)-1]
 					}
-				case 1:
+				case formStepMethod:
 					if len(m.formMethod) > 0 {
 						m.formMethod = m.formMethod[:len(m.formMethod)-1]
 					}
-				case 2:
+				case formStepStatus:
 					if len(m.formStatus) > 0 {
 						m.formStatus = m.formStatus[:len(m.formStatus)-1]
 					}
-				case 3:
+				case formStepDelay:
 					if len(m.formDelay) > 0 {
 						m.formDelay = m.formDelay[:len(m.formDelay)-1]
 					}
-				case 4:
+				case formStepJSONFile:
 					if len(m.formJSONFile) > 0 {
 						m.formJSONFile = m.formJSONFile[:len(m.formJSONFile)-1]
 					}
@@ -97,15 +106,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				// Agregar letras a cada campo
 				switch m.formStep {
-				case 0:
+				case formStepPath:
 					m.formPath += msg.String()
-				case 1:
+				case formStepMethod:
 					m.formMethod += msg.String()
-				case 2:
+				case formStepStatus:
 					m.formStatus += msg.String()
-				case 3:
+				case formStepDelay:
 					m.formDelay += msg.String()
-				case 4:
+				case formStepJSONFile:
 					m.formJSONFile += msg.String()
 				}
 			}

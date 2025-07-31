@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	//titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	borderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
 	rightBox    = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).Padding(1, 2)
 	columnGap   = 2
@@ -27,19 +27,19 @@ func (m model) View() string {
 		label := ""
 		value := ""
 		switch m.formStep {
-		case 0:
+		case formStepPath:
 			label = "Path"
 			value = m.formPath
-		case 1:
+		case formStepMethod:
 			label = "Method"
 			value = m.formMethod
-		case 2:
+		case formStepStatus:
 			label = "Status"
 			value = m.formStatus
-		case 3:
+		case formStepDelay:
 			label = "Delay (ms)"
 			value = m.formDelay
-		case 4:
+		case formStepJSONFile:
 			label = "JSON File"
 			value = m.formJSONFile
 		}
