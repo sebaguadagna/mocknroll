@@ -35,12 +35,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case listMode:
 			switch msg.String() {
 			case "q", "ctrl+c":
-				return m, tea.Quit
+				// Cambiar al modo de confirmación de salida
+				m.currentMode = confirmExitMode
+				return m, nil
 			case "a":
 				m.currentMode = formMode
 				m.formStep = formStepPath
 				return m, nil
+			}
 
+		// CONFIRM EXIT MODE
+		case confirmExitMode:
+			switch msg.String() {
+			case "y", "Y":
+				// Confirmar salida
+				return m, tea.Quit
+			case "n", "N", "esc":
+				// Cancelar salida y volver al modo lista
+				m.currentMode = listMode
+				return m, nil
 			}
 
 		// FORM MODE
