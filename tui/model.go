@@ -7,8 +7,9 @@ import (
 type mode int
 
 const (
-	listMode mode = iota //0
-	formMode             //1
+	listMode        mode = iota //0
+	formMode                    //1
+	confirmExitMode             // nuevo modo para confirmar salida
 )
 
 type mockItem struct {

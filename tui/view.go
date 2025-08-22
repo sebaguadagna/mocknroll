@@ -22,8 +22,11 @@ var (
 )
 
 func (m model) View() string {
-	// Modo formulario
-	if m.currentMode == formMode {
+	switch m.currentMode {
+	case confirmExitMode:
+		return "Are you sure you want to quit? (y/n)"
+	case formMode:
+		// Modo formulario
 		label := ""
 		value := ""
 		switch m.formStep {
@@ -47,38 +50,39 @@ func (m model) View() string {
 			"\n📝 Creating new mock...\n\n%s: %s\n\n(Type and press Enter to continue)\n[Esc: cancel]",
 			label, value,
 		)
-	}
+	case listMode:
+		// Parte izquierda: lista con título
+		left := borderStyle.Render(m.list.View())
 
-	// Parte izquierda: lista con título
-	left := borderStyle.Render(m.list.View())
+		// Parte derecha: detalle
+		selected, ok := m.list.SelectedItem().(mockItem)
+		var detailView string
+		if ok {
+			method := m.formMethodIfEmpty(selected)
+			path := m.formPathIfEmpty(selected)
+			color := methodColor[method]
+			if color == "" {
+				color = "7"
+			}
 
-	// Parte derecha: detalle
-	selected, ok := m.list.SelectedItem().(mockItem)
-	var detailView string
-	if ok {
-		method := m.formMethodIfEmpty(selected)
-		path := m.formPathIfEmpty(selected)
-		color := methodColor[method]
-		if color == "" {
-			color = "7"
+			coloredMethod := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(method)
+
+			detailView = fmt.Sprintf(
+				"🔍 Details\n\nPath:       %s\nMethod:     %s\nStatus:     %s\nDelay:      %s ms\nJSON File:  %s\n",
+				path,
+				coloredMethod,
+				selected.status,
+				selected.delay,
+				selected.jsonFile,
+			)
+		} else {
+			detailView = "Seleccioná un mock para ver detalles"
 		}
+		right := rightBox.Render(detailView)
 
-		coloredMethod := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(method)
-
-		detailView = fmt.Sprintf(
-			"🔍 Details\n\nPath:       %s\nMethod:     %s\nStatus:     %s\nDelay:      %s ms\nJSON File:  %s\n",
-			path,
-			coloredMethod,
-			selected.status,
-			selected.delay,
-			selected.jsonFile,
-		)
-	} else {
-		detailView = "Seleccioná un mock para ver detalles"
+		return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", columnGap), right)
 	}
-	right := rightBox.Render(detailView)
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", columnGap), right)
+	return ""
 }
 
 func (m model) formPathIfEmpty(item mockItem) string {
