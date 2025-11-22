@@ -1,0 +1,35 @@
++-------------------+
+| Start()           |
+| - Inicializa el   |
+|   programa con    |
+|   initialModel()  |
++-------------------+
+          |
+          v
++-------------------+
+| Model.View()      |
+| - Determina qué   |
+|   mostrar según   |
+|   el modo actual: |
+|   - formMode      |
+|   - listMode      |
++-------------------+
+          |
+          +-----------------------------+
+          |                             |
+          v                             v
++-------------------+         +-------------------+
+| formMode          |         | listMode          |
+| - Muestra un      |         | - Renderiza la    |
+|   formulario para |         |   lista de mocks  |
+|   crear un nuevo  |         | - Muestra detalles|
+|   mock            |         |   del mock        |
++-------------------+         +-------------------+
+          |
+          v
++-------------------+
+| Detalles del mock |
+| - Renderiza       |
+|   información del |
+|   mock seleccionado|
++-------------------+
