@@ -60,8 +60,22 @@ type model struct {
 
 func initialModel() model {
 	items := []list.Item{
-		mockItem{title: "GET /api/v1/users", description: "Returns users list", enabled: true},
-		mockItem{title: "POST /api/v1/orders", description: "Creates an order", enabled: true},
+		mockItem{
+			title:       "GET /api/v1/users",
+			description: "Returns users list",
+			status:      "200",
+			delay:       "30",
+			jsonFile:    "examples/users.json",
+			enabled:     true,
+		},
+		mockItem{
+			title:       "POST /api/v1/orders",
+			description: "Creates an order",
+			status:      "201",
+			delay:       "800",
+			jsonFile:    "examples/orders.json",
+			enabled:     true,
+		},
 	}
 
 	l := list.New(items, list.NewDefaultDelegate(), 30, 10) // valores temporales visibles

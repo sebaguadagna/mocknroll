@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -17,6 +18,10 @@ var (
 	borderStyle   = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
 	rightBox      = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).Padding(1, 2)
 	columnGap     = 2
+
+	delayLowStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))  // verde: <= 30ms
+	delayMidStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("208")) // naranja: 31-150ms
+	delayHighStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))   // rojo: > 150ms
 
 	methodColor = map[string]string{
 		"GET":    "10", // verde
@@ -137,10 +142,20 @@ func (m model) formMethodIfEmpty(item mockItem) string {
 }
 
 func delayText(delay string) string {
-	if delay == "" {
-		return "Responds immediately"
+	ms, _ := strconv.Atoi(delay) // valor no numérico o vacío -> 0 (verde)
+
+	style := delayLowStyle
+	switch {
+	case ms > 150:
+		style = delayHighStyle
+	case ms > 30:
+		style = delayMidStyle
 	}
-	return fmt.Sprintf("Responds in %sms", delay)
+
+	if delay == "" {
+		return style.Render("Responds immediately")
+	}
+	return "Responds in " + style.Render(delay+"ms")
 }
 
 func previewJSON(path string) string {
