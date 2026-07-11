@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -11,6 +12,7 @@ const (
 	formStepStatus
 	formStepDelay
 	formStepJSONFile
+	totalFormSteps
 )
 
 func (m model) Init() tea.Cmd {
@@ -23,9 +25,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		listWidth := msg.Width / 2
-		listHeight := msg.Height - 4
-		m.list.SetSize(listWidth, listHeight)
+		// listWidth/listHeight: ancho/alto de CONTENIDO CON padding para el panel
+		// izquierdo (lo que se le pasa a lipgloss Width()/Height() en view.go).
+		// listHeight lo comparten ambos paneles.
+		m.width = msg.Width
+		m.listWidth = msg.Width * 6 / 10 // la lista es la superficie de navegación principal
+		m.listHeight = msg.Height - 3    // -3: borde (2) + 1 línea de margen de seguridad
+		// Lo que le pasamos al list es más chico: descontamos nuestro propio
+		// padding (2 cols/filas por lado) y 2 filas para nuestra línea de ayuda.
+		m.list.SetSize(m.listWidth-4, m.listHeight-4)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -34,14 +42,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// LIST MODE
 		case listMode:
 			switch msg.String() {
-			case "q", "ctrl+c":
-				// Cambiar al modo de confirmación de salida
+			case "q", "Q", "esc":
+				if m.list.FilterState() == list.Filtering {
+					break // dejar que el list maneje la tecla (escribir "q" o cancelar el filtro con esc)
+				}
+				m.currentMode = confirmExitMode
+				return m, nil
+			case "ctrl+c":
 				m.currentMode = confirmExitMode
 				return m, nil
 			case "a":
 				m.currentMode = formMode
 				m.formStep = formStepPath
 				return m, nil
+			case "t":
+				if m.list.FilterState() == list.Filtering {
+					break // dejar que el list escriba la "t" en el filtro
+				}
+				if selected, ok := m.list.SelectedItem().(mockItem); ok {
+					selected.enabled = !selected.enabled
+					return m, m.list.SetItem(m.list.Index(), selected)
+				}
 			}
 
 		// CONFIRM EXIT MODE
@@ -82,6 +103,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						status:      m.formStatus,
 						delay:       m.formDelay,
 						jsonFile:    m.formJSONFile,
+						enabled:     true,
 					}
 					cmd = tea.Batch(cmd, m.list.InsertItem(len(m.list.Items()), newItem))
 
