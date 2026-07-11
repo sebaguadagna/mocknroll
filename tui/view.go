@@ -8,7 +8,9 @@ import (
 )
 
 var (
-	//titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	warnStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
+	stepStyle   = lipgloss.NewStyle().Faint(true)
 	borderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
 	rightBox    = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).Padding(1, 2)
 	columnGap   = 2
@@ -24,7 +26,11 @@ var (
 func (m model) View() string {
 	switch m.currentMode {
 	case confirmExitMode:
-		return "Are you sure you want to quit? (y/n)"
+		content := fmt.Sprintf(
+			"%s\n\nAre you sure you want to quit? (y/n)",
+			warnStyle.Render("Quit mocknroll?"),
+		)
+		return borderStyle.Render(content)
 	case formMode:
 		// Modo formulario
 		label := ""
@@ -46,10 +52,13 @@ func (m model) View() string {
 			label = "JSON File"
 			value = m.formJSONFile
 		}
-		return fmt.Sprintf(
-			"\n📝 Creating new mock...\n\n%s: %s\n\n(Type and press Enter to continue)\n[Esc: cancel]",
+		content := fmt.Sprintf(
+			"%s  %s\n\n%s: %s\n\n(Type and press Enter to continue)\n[Esc: cancel]",
+			headerStyle.Render("Creating new mock..."),
+			stepStyle.Render(fmt.Sprintf("Step %d/%d", m.formStep+1, totalFormSteps)),
 			label, value,
 		)
+		return borderStyle.Render(content)
 	case listMode:
 		// Parte izquierda: lista con título
 		left := borderStyle.Render(m.list.View())
@@ -68,7 +77,8 @@ func (m model) View() string {
 			coloredMethod := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(method)
 
 			detailView = fmt.Sprintf(
-				"🔍 Details\n\nPath:       %s\nMethod:     %s\nStatus:     %s\nDelay:      %s ms\nJSON File:  %s\n",
+				"%s\n\nPath:       %s\nMethod:     %s\nStatus:     %s\nDelay:      %s ms\nJSON File:  %s\n",
+				headerStyle.Render("Details"),
 				path,
 				coloredMethod,
 				selected.status,

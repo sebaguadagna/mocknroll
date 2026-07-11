@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -11,6 +12,7 @@ const (
 	formStepStatus
 	formStepDelay
 	formStepJSONFile
+	totalFormSteps
 )
 
 func (m model) Init() tea.Cmd {
@@ -34,8 +36,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// LIST MODE
 		case listMode:
 			switch msg.String() {
-			case "q", "ctrl+c":
-				// Cambiar al modo de confirmación de salida
+			case "q", "Q", "esc":
+				if m.list.FilterState() == list.Filtering {
+					break // dejar que el list maneje la tecla (escribir "q" o cancelar el filtro con esc)
+				}
+				m.currentMode = confirmExitMode
+				return m, nil
+			case "ctrl+c":
 				m.currentMode = confirmExitMode
 				return m, nil
 			case "a":

@@ -1,7 +1,19 @@
 package tui
 
 import (
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+)
+
+var (
+	addMockKey = key.NewBinding(
+		key.WithKeys("a"),
+		key.WithHelp("a", "add mock"),
+	)
+	quitKey = key.NewBinding(
+		key.WithKeys("q", "esc"),
+		key.WithHelp("q/esc", "quit"),
+	)
 )
 
 type mode int
@@ -43,6 +55,13 @@ func initialModel() model {
 
 	l := list.New(items, list.NewDefaultDelegate(), 30, 10) // valores temporales visibles
 	l.Title = "Mocks loaded"
+	l.KeyMap.Quit.SetEnabled(false) // reemplazado por quitKey: q/esc piden confirmación
+	l.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{addMockKey, quitKey}
+	}
+	l.AdditionalFullHelpKeys = func() []key.Binding {
+		return []key.Binding{addMockKey, quitKey}
+	}
 
 	return model{
 		list:        l,
