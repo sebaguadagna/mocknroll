@@ -2,18 +2,21 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
 var (
-	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	warnStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
-	stepStyle   = lipgloss.NewStyle().Faint(true)
-	borderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
-	rightBox    = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).Padding(1, 2)
-	columnGap   = 2
+	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	warnStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
+	stepStyle     = lipgloss.NewStyle().Faint(true)
+	enabledStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	disabledStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	borderStyle   = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
+	rightBox      = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).Padding(1, 2)
+	columnGap     = 2
 
 	methodColor = map[string]string{
 		"GET":    "10", // verde
@@ -76,14 +79,22 @@ func (m model) View() string {
 
 			coloredMethod := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(method)
 
+			statusBadge := enabledStyle.Render("● Enabled")
+			if !selected.enabled {
+				statusBadge = disabledStyle.Render("● Disabled")
+			}
+
 			detailView = fmt.Sprintf(
-				"%s\n\nPath:       %s\nMethod:     %s\nStatus:     %s\nDelay:      %s ms\nJSON File:  %s\n",
+				"%s\n\n%s %s\n%s\n\n%s   %s\nStatus:     %s\nJSON File:  %s\n\nResponse preview:\n%s",
 				headerStyle.Render("Details"),
-				path,
 				coloredMethod,
+				path,
+				selected.description,
+				statusBadge,
+				delayText(selected.delay),
 				selected.status,
-				selected.delay,
 				selected.jsonFile,
+				stepStyle.Render(previewJSON(selected.jsonFile)),
 			)
 		} else {
 			detailView = "Seleccioná un mock para ver detalles"
@@ -107,7 +118,7 @@ func (m model) formPathIfEmpty(item mockItem) string {
 	if m.formPath != "" {
 		return m.formPath
 	}
-	split := strings.SplitN(item.Title(), " ", 2)
+	split := strings.SplitN(item.title, " ", 2)
 	if len(split) == 2 {
 		return split[1]
 	}
@@ -118,9 +129,36 @@ func (m model) formMethodIfEmpty(item mockItem) string {
 	if m.formMethod != "" {
 		return m.formMethod
 	}
-	split := strings.SplitN(item.Title(), " ", 2)
+	split := strings.SplitN(item.title, " ", 2)
 	if len(split) > 0 {
 		return split[0]
 	}
 	return ""
+}
+
+func delayText(delay string) string {
+	if delay == "" {
+		return "Responds immediately"
+	}
+	return fmt.Sprintf("Responds in %sms", delay)
+}
+
+func previewJSON(path string) string {
+	if path == "" {
+		return "(no response file configured)"
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Sprintf("(couldn't read %s)", path)
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	truncated := len(lines) > 6
+	if truncated {
+		lines = lines[:6]
+	}
+	out := strings.Join(lines, "\n")
+	if truncated {
+		out += "\n…"
+	}
+	return out
 }

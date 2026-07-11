@@ -50,6 +50,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.currentMode = formMode
 				m.formStep = formStepPath
 				return m, nil
+			case "t":
+				if m.list.FilterState() == list.Filtering {
+					break // dejar que el list escriba la "t" en el filtro
+				}
+				if selected, ok := m.list.SelectedItem().(mockItem); ok {
+					selected.enabled = !selected.enabled
+					return m, m.list.SetItem(m.list.Index(), selected)
+				}
 			}
 
 		// CONFIRM EXIT MODE
@@ -90,6 +98,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						status:      m.formStatus,
 						delay:       m.formDelay,
 						jsonFile:    m.formJSONFile,
+						enabled:     true,
 					}
 					cmd = tea.Batch(cmd, m.list.InsertItem(len(m.list.Items()), newItem))
 
