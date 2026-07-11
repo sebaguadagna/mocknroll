@@ -25,10 +25,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		// listWidth/listHeight: ancho/alto de CONTENIDO CON padding para el panel
+		// izquierdo (lo que se le pasa a lipgloss Width()/Height() en view.go).
+		// listHeight lo comparten ambos paneles.
 		m.width = msg.Width
-		listWidth := msg.Width * 6 / 10 // la lista es la superficie de navegación principal
-		listHeight := msg.Height - 4
-		m.list.SetSize(listWidth, listHeight)
+		m.listWidth = msg.Width * 6 / 10 // la lista es la superficie de navegación principal
+		m.listHeight = msg.Height - 3    // -3: borde (2) + 1 línea de margen de seguridad
+		// Lo que le pasamos al list es más chico: descontamos nuestro propio
+		// padding (2 cols/filas por lado) y 2 filas para nuestra línea de ayuda.
+		m.list.SetSize(m.listWidth-4, m.listHeight-4)
 		return m, nil
 
 	case tea.KeyMsg:

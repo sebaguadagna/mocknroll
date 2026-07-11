@@ -49,6 +49,8 @@ func (m mockItem) FilterValue() string { return m.title }
 type model struct {
 	list         list.Model
 	width        int
+	listWidth    int
+	listHeight   int
 	currentMode  mode
 	formStep     int
 	formPath     string
@@ -81,12 +83,7 @@ func initialModel() model {
 	l := list.New(items, list.NewDefaultDelegate(), 30, 10) // valores temporales visibles
 	l.Title = "Mocks loaded"
 	l.KeyMap.Quit.SetEnabled(false) // reemplazado por quitKey: q/esc piden confirmación
-	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{addMockKey, toggleEnabledKey, quitKey}
-	}
-	l.AdditionalFullHelpKeys = func() []key.Binding {
-		return []key.Binding{addMockKey, toggleEnabledKey, quitKey}
-	}
+	l.SetShowHelp(false)            // el help propio del list no trunca bien en anchos angostos (bug de la lib); usamos el nuestro en view.go
 
 	return model{
 		list:        l,

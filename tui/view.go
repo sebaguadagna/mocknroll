@@ -16,8 +16,14 @@ var (
 	enabledStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	disabledStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	borderStyle   = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
-	rightBox      = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).Padding(1, 2)
 	columnGap     = 2
+
+	// Usados sólo en listMode: el contenido se acota (Width/Height/MaxWidth/
+	// MaxHeight) ANTES de agregar el borde, para garantizar que el borde de
+	// cierre nunca se recorte por accidente (ver comentario en View()).
+	panelPadding     = lipgloss.NewStyle().Padding(1, 2)
+	leftPanelBorder  = lipgloss.NewStyle().Border(lipgloss.NormalBorder())
+	rightPanelBorder = lipgloss.NewStyle().Border(lipgloss.DoubleBorder())
 
 	delayLowStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))  // verde: <= 30ms
 	delayMidStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("208")) // naranja: 31-150ms
@@ -68,8 +74,29 @@ func (m model) View() string {
 		)
 		return borderStyle.Render(content)
 	case listMode:
-		// Parte izquierda: lista con título
-		left := borderStyle.Render(m.list.View())
+		// Truncar por altura DESPUÉS de agregar el borde puede recortar justo
+		// la fila del borde de cierre (nos pasó). Por eso acotamos el
+		// contenido (padding incluido, sin borde) primero con Width/Height/
+		// MaxWidth/MaxHeight —todo en las mismas unidades, sin ambigüedad—, y
+		// recién then envolvemos el resultado YA acotado en el borde, que así
+		// nunca puede terminar recortado.
+
+		// Ayuda propia en vez de la del list: bubbles/help (vendored) no trunca
+		// bien su línea de ayuda en anchos angostos (deja de agregar el "…" y
+		// termina renderizando el texto completo sin límite), lo que rompe el
+		// layout entero. Width() de lipgloss sí hace word-wrap real.
+		hintLine := stepStyle.Render(fmt.Sprintf(
+			"%s %s • / filter • %s %s • %s %s",
+			addMockKey.Help().Key, addMockKey.Help().Desc,
+			toggleEnabledKey.Help().Key, toggleEnabledKey.Help().Desc,
+			quitKey.Help().Key, quitKey.Help().Desc,
+		))
+		listBody := m.list.View() + "\n\n" + hintLine
+		leftContent := panelPadding.
+			Width(m.listWidth).MaxWidth(m.listWidth).
+			Height(m.listHeight).MaxHeight(m.listHeight).
+			Render(listBody)
+		left := leftPanelBorder.Render(leftContent)
 
 		// Parte derecha: detalle
 		selected, ok := m.list.SelectedItem().(mockItem)
@@ -105,14 +132,17 @@ func (m model) View() string {
 			detailView = "Seleccioná un mock para ver detalles"
 		}
 
-		rightStyle := rightBox
-		if rightWidth := m.width - lipgloss.Width(left) - columnGap; rightWidth > 2 {
-			rightStyle = rightStyle.Width(rightWidth - 2) // -2: ancho del borde izq/der
+		// m.listWidth+2: ancho total ya renderizado del panel izquierdo (borde
+		// incluido), para calcular cuánto le queda disponible al derecho.
+		rightContentWidth := m.width - (m.listWidth + 2) - columnGap - 2
+		if rightContentWidth < 10 {
+			rightContentWidth = 10
 		}
-		if leftHeight := lipgloss.Height(left); leftHeight > 2 {
-			rightStyle = rightStyle.Height(leftHeight - 2) // -2: alto del borde sup/inf
-		}
-		right := rightStyle.Render(detailView)
+		rightContent := panelPadding.
+			Width(rightContentWidth).MaxWidth(rightContentWidth).
+			Height(m.listHeight).MaxHeight(m.listHeight).
+			Render(detailView)
+		right := rightPanelBorder.Render(rightContent)
 
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", columnGap), right)
 	}
