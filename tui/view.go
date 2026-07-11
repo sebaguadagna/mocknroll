@@ -88,7 +88,15 @@ func (m model) View() string {
 		} else {
 			detailView = "Seleccioná un mock para ver detalles"
 		}
-		right := rightBox.Render(detailView)
+
+		rightStyle := rightBox
+		if rightWidth := m.width - lipgloss.Width(left) - columnGap; rightWidth > 2 {
+			rightStyle = rightStyle.Width(rightWidth - 2) // -2: ancho del borde izq/der
+		}
+		if leftHeight := lipgloss.Height(left); leftHeight > 2 {
+			rightStyle = rightStyle.Height(leftHeight - 2) // -2: alto del borde sup/inf
+		}
+		right := rightStyle.Render(detailView)
 
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", columnGap), right)
 	}

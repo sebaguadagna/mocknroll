@@ -25,7 +25,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		listWidth := msg.Width / 2
+		m.width = msg.Width
+		listWidth := msg.Width * 6 / 10 // la lista es la superficie de navegación principal
 		listHeight := msg.Height - 4
 		m.list.SetSize(listWidth, listHeight)
 		return m, nil

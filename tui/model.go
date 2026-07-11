@@ -38,6 +38,7 @@ func (m mockItem) FilterValue() string { return m.title }
 
 type model struct {
 	list         list.Model
+	width        int
 	currentMode  mode
 	formStep     int
 	formPath     string
