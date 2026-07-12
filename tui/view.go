@@ -24,6 +24,7 @@ var (
 	spinnerStyle    = lipgloss.NewStyle().Foreground(selectedAccent)
 	formHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(selectedAccent)
 	trafficStyle    = lipgloss.NewStyle().Foreground(selectedAccent)
+	cursorStyle     = lipgloss.NewStyle().Reverse(true) // bloque tipo terminal, mismo truco que bubbles/textinput
 	warnStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
 	stepStyle       = lipgloss.NewStyle().Faint(true)
 	enabledStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
@@ -86,7 +87,7 @@ func (m model) View() string {
 			formHeaderStyle.Render("Creating new mock..."),
 			stepStyle.Render(fmt.Sprintf("Step %d/%d", m.formStep+1, totalFormSteps)),
 			m.progress.ViewAs(percent),
-			label, value,
+			label, fieldWithCursor(value, m.cursorVisible),
 		)
 		return borderStyle.Render(content)
 	case listMode:
@@ -215,6 +216,17 @@ func delayText(delay string) string {
 		return style.Render("Responds immediately")
 	}
 	return "Responds in " + style.Render(delay+"ms")
+}
+
+// fieldWithCursor le agrega al valor de un campo del formulario un cursor de
+// edición al final (siempre al final: los campos sólo se editan por
+// append/backspace, nunca en medio). Reserva el espacio del bloque aunque
+// esté "apagado" para que el resto del contenido no salte al parpadear.
+func fieldWithCursor(value string, visible bool) string {
+	if visible {
+		return value + cursorStyle.Render(" ")
+	}
+	return value + " "
 }
 
 var sparkBlocks = []rune("▁▂▃▄▅▆▇█")

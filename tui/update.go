@@ -30,6 +30,18 @@ func trafficTick() tea.Cmd {
 	})
 }
 
+// cursorTickMsg alterna la visibilidad del cursor de texto en el campo activo
+// del formulario (mismo intervalo que usa bubbles/textinput por defecto).
+type cursorTickMsg time.Time
+
+const cursorBlinkInterval = 530 * time.Millisecond
+
+func cursorTick() tea.Cmd {
+	return tea.Tick(cursorBlinkInterval, func(t time.Time) tea.Msg {
+		return cursorTickMsg(t)
+	})
+}
+
 func (m model) Init() tea.Cmd {
 	m.list.SetSize(120, 30)
 	return trafficTick()
@@ -47,6 +59,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+
+	case cursorTickMsg:
+		if m.currentMode != formMode {
+			// dejar morir la cadena de ticks, igual que con el spinner.
+			return m, nil
+		}
+		m.cursorVisible = !m.cursorVisible
+		return m, cursorTick()
 
 	case trafficTickMsg:
 		// Corre en cualquier modo: el tráfico "le llega al server" sin
@@ -108,7 +128,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "a":
 				m.currentMode = formMode
 				m.formStep = formStepPath
-				return m, m.spinner.Tick
+				m.cursorVisible = true
+				return m, tea.Batch(m.spinner.Tick, cursorTick())
 			case "t":
 				if m.list.FilterState() == list.Filtering {
 					break // dejar que el list escriba la "t" en el filtro
@@ -140,6 +161,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.formStep = formStepPath
 				return m, nil
 			case tea.KeyEnter:
+				m.cursorVisible = true // reaparece de entrada en el campo siguiente, en vez de arrancar a mitad de parpadeo
 				switch m.formStep {
 				case formStepPath:
 					m.formStep = formStepMethod
@@ -169,6 +191,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				}
 			case tea.KeyBackspace:
+				m.cursorVisible = true // no queda "apagado" a mitad de parpadeo mientras se edita
 				// Permitir borrar carácter
 				switch m.formStep {
 				case formStepPath:
@@ -201,6 +224,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if msg.Type != tea.KeyRunes && msg.Type != tea.KeySpace {
 					break
 				}
+				m.cursorVisible = true // idem: visible de entrada al tipear, no a mitad de parpadeo
 				switch m.formStep {
 				case formStepPath:
 					m.formPath += msg.String()

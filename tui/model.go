@@ -73,7 +73,8 @@ type model struct {
 	formStatus     string
 	formDelay      string
 	formJSONFile   string
-	trafficElapsed int // segundos acumulados dentro del bucket en curso, compartido: todos los mocks rotan buckets al mismo tiempo
+	cursorVisible  bool // parpadeo del cursor de texto en formMode, alternado por cursorTick (update.go)
+	trafficElapsed int  // segundos acumulados dentro del bucket en curso, compartido: todos los mocks rotan buckets al mismo tiempo
 }
 
 // seedTrafficBuckets arranca el historial con datos simulados para que el
