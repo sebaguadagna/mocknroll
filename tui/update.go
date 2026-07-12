@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"math/rand"
+	"time"
+
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,9 +19,20 @@ const (
 	totalFormSteps
 )
 
+// trafficTickMsg simula la llegada de requests a los mocks servidos, un
+// segundo a la vez. Cuando server.go sirva tráfico real, esto se reemplaza
+// por eventos genuinos en vez de un tea.Tick.
+type trafficTickMsg time.Time
+
+func trafficTick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return trafficTickMsg(t)
+	})
+}
+
 func (m model) Init() tea.Cmd {
 	m.list.SetSize(120, 30)
-	return nil
+	return trafficTick()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -33,6 +47,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+
+	case trafficTickMsg:
+		// Corre en cualquier modo: el tráfico "le llega al server" sin
+		// importar qué esté mirando el usuario en la TUI. Es por mock (cada
+		// API mockeada tiene su propio historial), pero todos rotan de
+		// bucket juntos, así que el corte de los 10s es compartido.
+		m.trafficElapsed++
+		roll := m.trafficElapsed >= trafficBucketDuration
+		if roll {
+			m.trafficElapsed = 0
+		}
+
+		items := m.list.Items()
+		for i, it := range items {
+			mi := it.(mockItem)
+			if len(mi.trafficBuckets) == 0 {
+				items[i] = mi
+				continue
+			}
+			if mi.enabled {
+				last := len(mi.trafficBuckets) - 1
+				mi.trafficBuckets[last] += rand.Intn(4) // 0-3 requests simulados este segundo, por mock
+			}
+			if roll {
+				mi.trafficBuckets = append(mi.trafficBuckets[1:], 0)
+			}
+			items[i] = mi
+		}
+		cmd = m.list.SetItems(items)
+		return m, tea.Batch(cmd, trafficTick())
 
 	case tea.WindowSizeMsg:
 		// listWidth/listHeight: ancho/alto de CONTENIDO CON padding para el panel
@@ -108,12 +152,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case formStepJSONFile:
 					// Crear nuevo mockItem
 					newItem := mockItem{
-						title:       m.formMethod + " " + m.formPath,
-						description: "Status: " + m.formStatus + ", Delay: " + m.formDelay + "ms",
-						status:      m.formStatus,
-						delay:       m.formDelay,
-						jsonFile:    m.formJSONFile,
-						enabled:     true,
+						title:          m.formMethod + " " + m.formPath,
+						description:    "Status: " + m.formStatus + ", Delay: " + m.formDelay + "ms",
+						status:         m.formStatus,
+						delay:          m.formDelay,
+						jsonFile:       m.formJSONFile,
+						enabled:        true,
+						trafficBuckets: make([]int, trafficBucketCount), // mock recién creado: sin tráfico todavía
 					}
 					cmd = tea.Batch(cmd, m.list.InsertItem(len(m.list.Items()), newItem))
 

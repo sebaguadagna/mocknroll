@@ -23,6 +23,7 @@ var (
 	selectedAccent  = lipgloss.Color("#EE6FF8")
 	spinnerStyle    = lipgloss.NewStyle().Foreground(selectedAccent)
 	formHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(selectedAccent)
+	trafficStyle    = lipgloss.NewStyle().Foreground(selectedAccent)
 	warnStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
 	stepStyle       = lipgloss.NewStyle().Faint(true)
 	enabledStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
@@ -131,8 +132,20 @@ func (m model) View() string {
 				statusBadge = disabledStyle.Render("● Disabled")
 			}
 
+			// El sparkline va ANTES de "Response preview" a propósito: el
+			// preview ya se autolimita a 6 líneas + "…", pero si igual no
+			// entra todo en el panel, lipgloss trunca por abajo (MaxHeight
+			// más adelante) — así lo que se corta es la cola del preview, no
+			// el sparkline.
+			trafficLine := fmt.Sprintf(
+				"%s %s %s",
+				stepStyle.Render("Requests (5m):"),
+				trafficStyle.Render(sparkline(selected.trafficBuckets)),
+				stepStyle.Render(fmt.Sprintf("%d total", sumInts(selected.trafficBuckets))),
+			)
+
 			detailView = fmt.Sprintf(
-				"%s\n\n%s %s\n%s\n\n%s   %s\nStatus:     %s\nJSON File:  %s\n\nResponse preview:\n%s",
+				"%s\n\n%s %s\n%s\n\n%s   %s\nStatus:     %s\nJSON File:  %s\n\n%s\n\nResponse preview:\n%s",
 				headerStyle.Render("Details"),
 				coloredMethod,
 				path,
@@ -141,6 +154,7 @@ func (m model) View() string {
 				delayText(selected.delay),
 				selected.status,
 				selected.jsonFile,
+				trafficLine,
 				stepStyle.Render(previewJSON(selected.jsonFile)),
 			)
 		} else {
@@ -201,6 +215,41 @@ func delayText(delay string) string {
 		return style.Render("Responds immediately")
 	}
 	return "Responds in " + style.Render(delay+"ms")
+}
+
+var sparkBlocks = []rune("▁▂▃▄▅▆▇█")
+
+// sparkline renderiza buckets (conteos por intervalo) como una franja de
+// caracteres de bloque Unicode escalada al máximo del propio slice, un bucket
+// por carácter (sin ejes ni labels: pensado para caber en el ancho angosto
+// del panel izquierdo).
+func sparkline(buckets []int) string {
+	if len(buckets) == 0 {
+		return ""
+	}
+	max := 0
+	for _, v := range buckets {
+		if v > max {
+			max = v
+		}
+	}
+	if max == 0 {
+		max = 1
+	}
+	runes := make([]rune, len(buckets))
+	for i, v := range buckets {
+		idx := v * (len(sparkBlocks) - 1) / max
+		runes[i] = sparkBlocks[idx]
+	}
+	return string(runes)
+}
+
+func sumInts(vals []int) int {
+	total := 0
+	for _, v := range vals {
+		total += v
+	}
+	return total
 }
 
 func previewJSON(path string) string {

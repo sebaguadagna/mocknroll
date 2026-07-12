@@ -1,10 +1,20 @@
 package tui
 
 import (
+	"math/rand"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
+)
+
+// trafficBucketCount * trafficBucketDuration = ventana total mostrada (5 min).
+// TODO: reemplazar por conteo real de requests una vez que server.go sirva
+// los mocks; por ahora se simula tráfico para probar la visualización.
+const (
+	trafficBucketCount    = 30
+	trafficBucketDuration = 10 // segundos por bucket
 )
 
 var (
@@ -31,12 +41,13 @@ const (
 )
 
 type mockItem struct {
-	title       string
-	description string
-	status      string
-	delay       string
-	jsonFile    string
-	enabled     bool
+	title          string
+	description    string
+	status         string
+	delay          string
+	jsonFile       string
+	enabled        bool
+	trafficBuckets []int // requests por bucket de trafficBucketDuration segundos, uno por mock; el último es el bucket "en curso"
 }
 
 func (m mockItem) Title() string {
@@ -49,38 +60,52 @@ func (m mockItem) Description() string { return m.description }
 func (m mockItem) FilterValue() string { return m.title }
 
 type model struct {
-	list         list.Model
-	spinner      spinner.Model
-	progress     progress.Model
-	width        int
-	listWidth    int
-	listHeight   int
-	currentMode  mode
-	formStep     int
-	formPath     string
-	formMethod   string
-	formStatus   string
-	formDelay    string
-	formJSONFile string
+	list           list.Model
+	spinner        spinner.Model
+	progress       progress.Model
+	width          int
+	listWidth      int
+	listHeight     int
+	currentMode    mode
+	formStep       int
+	formPath       string
+	formMethod     string
+	formStatus     string
+	formDelay      string
+	formJSONFile   string
+	trafficElapsed int // segundos acumulados dentro del bucket en curso, compartido: todos los mocks rotan buckets al mismo tiempo
+}
+
+// seedTrafficBuckets arranca el historial con datos simulados para que el
+// sparkline de un mock no empiece en cero; trafficTick (update.go) lo va
+// rotando en vivo.
+func seedTrafficBuckets() []int {
+	buckets := make([]int, trafficBucketCount)
+	for i := range buckets {
+		buckets[i] = rand.Intn(20)
+	}
+	return buckets
 }
 
 func initialModel() model {
 	items := []list.Item{
 		mockItem{
-			title:       "GET /api/v1/users",
-			description: "Returns users list",
-			status:      "200",
-			delay:       "30",
-			jsonFile:    "examples/users.json",
-			enabled:     true,
+			title:          "GET /api/v1/users",
+			description:    "Returns users list",
+			status:         "200",
+			delay:          "30",
+			jsonFile:       "examples/users.json",
+			enabled:        true,
+			trafficBuckets: seedTrafficBuckets(),
 		},
 		mockItem{
-			title:       "POST /api/v1/orders",
-			description: "Creates an order",
-			status:      "201",
-			delay:       "800",
-			jsonFile:    "examples/orders.json",
-			enabled:     true,
+			title:          "POST /api/v1/orders",
+			description:    "Creates an order",
+			status:         "201",
+			delay:          "800",
+			jsonFile:       "examples/orders.json",
+			enabled:        true,
+			trafficBuckets: seedTrafficBuckets(),
 		},
 	}
 
