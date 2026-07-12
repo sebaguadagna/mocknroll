@@ -10,13 +10,25 @@ import (
 )
 
 var (
-	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	warnStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
-	stepStyle     = lipgloss.NewStyle().Faint(true)
-	enabledStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	disabledStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	borderStyle   = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
-	columnGap     = 2
+	// mismo estilo que list.DefaultStyles().Title usa para "Mocks loaded" en
+	// la pantalla principal, para que "Details" se sienta el mismo tipo de título.
+	headerStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("62")).
+			Foreground(lipgloss.Color("230")).
+			Padding(0, 1)
+
+	// mismo color que list.NewDefaultDelegate() usa para el título del ítem
+	// seleccionado en la pantalla principal (SelectedTitle, #EE6FF8), para que
+	// el spinner y el encabezado del formulario se sientan "el mismo acento".
+	selectedAccent  = lipgloss.Color("#EE6FF8")
+	spinnerStyle    = lipgloss.NewStyle().Foreground(selectedAccent)
+	formHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(selectedAccent)
+	warnStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
+	stepStyle       = lipgloss.NewStyle().Faint(true)
+	enabledStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	disabledStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	borderStyle     = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
+	columnGap       = 2
 
 	// Usados sólo en listMode: el contenido se acota (Width/Height/MaxWidth/
 	// MaxHeight) ANTES de agregar el borde, para garantizar que el borde de
@@ -66,10 +78,13 @@ func (m model) View() string {
 			label = "JSON File"
 			value = m.formJSONFile
 		}
+		percent := float64(m.formStep+1) / float64(totalFormSteps)
 		content := fmt.Sprintf(
-			"%s  %s\n\n%s: %s\n\n(Type and press Enter to continue)\n[Esc: cancel]",
-			headerStyle.Render("Creating new mock..."),
+			"%s %s  %s\n\n%s\n\n%s: %s\n\n(Type and press Enter to continue)\n[Esc: cancel]",
+			m.spinner.View(),
+			formHeaderStyle.Render("Creating new mock..."),
 			stepStyle.Render(fmt.Sprintf("Step %d/%d", m.formStep+1, totalFormSteps)),
+			m.progress.ViewAs(percent),
 			label, value,
 		)
 		return borderStyle.Render(content)

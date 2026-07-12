@@ -2,6 +2,7 @@ package tui
 
 import (
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -24,6 +25,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		if m.currentMode != formMode {
+			// dejar morir la cadena de ticks: no la seguimos re-programando
+			// una vez que salimos del formulario.
+			return m, nil
+		}
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
 	case tea.WindowSizeMsg:
 		// listWidth/listHeight: ancho/alto de CONTENIDO CON padding para el panel
 		// izquierdo (lo que se le pasa a lipgloss Width()/Height() en view.go).
@@ -54,7 +64,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "a":
 				m.currentMode = formMode
 				m.formStep = formStepPath
-				return m, nil
+				return m, m.spinner.Tick
 			case "t":
 				if m.list.FilterState() == list.Filtering {
 					break // dejar que el list escriba la "t" en el filtro
@@ -139,7 +149,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			default:
-				// Agregar letras a cada campo
+				// Solo texto imprimible (runas sueltas o espacio) va a los campos;
+				// cualquier otra tecla especial (flechas, tab, ctrl+c, F1, ...) se ignora
+				// en vez de insertarse como texto literal (era el bug: "up", "tab", etc.
+				// terminaban dentro del campo).
+				if msg.Type != tea.KeyRunes && msg.Type != tea.KeySpace {
+					break
+				}
 				switch m.formStep {
 				case formStepPath:
 					m.formPath += msg.String()

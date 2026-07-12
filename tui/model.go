@@ -3,6 +3,8 @@ package tui
 import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
 )
 
 var (
@@ -48,6 +50,8 @@ func (m mockItem) FilterValue() string { return m.title }
 
 type model struct {
 	list         list.Model
+	spinner      spinner.Model
+	progress     progress.Model
 	width        int
 	listWidth    int
 	listHeight   int
@@ -85,8 +89,16 @@ func initialModel() model {
 	l.KeyMap.Quit.SetEnabled(false) // reemplazado por quitKey: q/esc piden confirmación
 	l.SetShowHelp(false)            // el help propio del list no trunca bien en anchos angostos (bug de la lib); usamos el nuestro en view.go
 
+	sp := spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(spinnerStyle))
+
+	// progress-static: sin Update()/Tick, se renderiza con ViewAs(percent) a
+	// partir de m.formStep en cada View(), sin animación propia.
+	pg := progress.New(progress.WithDefaultGradient(), progress.WithWidth(40))
+
 	return model{
 		list:        l,
+		spinner:     sp,
+		progress:    pg,
 		currentMode: listMode,
 		formStep:    0,
 	}
