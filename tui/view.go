@@ -10,13 +10,27 @@ import (
 )
 
 var (
-	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	warnStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
-	stepStyle     = lipgloss.NewStyle().Faint(true)
-	enabledStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	disabledStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	borderStyle   = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
-	columnGap     = 2
+	// mismo estilo que list.DefaultStyles().Title usa para "Mocks loaded" en
+	// la pantalla principal, para que "Details" se sienta el mismo tipo de título.
+	headerStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("62")).
+			Foreground(lipgloss.Color("230")).
+			Padding(0, 1)
+
+	// mismo color que list.NewDefaultDelegate() usa para el título del ítem
+	// seleccionado en la pantalla principal (SelectedTitle, #EE6FF8), para que
+	// el spinner y el encabezado del formulario se sientan "el mismo acento".
+	selectedAccent  = lipgloss.Color("#EE6FF8")
+	spinnerStyle    = lipgloss.NewStyle().Foreground(selectedAccent)
+	formHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(selectedAccent)
+	trafficStyle    = lipgloss.NewStyle().Foreground(selectedAccent)
+	cursorStyle     = lipgloss.NewStyle().Reverse(true) // bloque tipo terminal, mismo truco que bubbles/textinput
+	warnStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
+	stepStyle       = lipgloss.NewStyle().Faint(true)
+	enabledStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	disabledStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	borderStyle     = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
+	columnGap       = 2
 
 	// Usados sólo en listMode: el contenido se acota (Width/Height/MaxWidth/
 	// MaxHeight) ANTES de agregar el borde, para garantizar que el borde de
@@ -66,11 +80,22 @@ func (m model) View() string {
 			label = "JSON File"
 			value = m.formJSONFile
 		}
+		percent := float64(m.formStep+1) / float64(totalFormSteps)
 		content := fmt.Sprintf(
-			"%s  %s\n\n%s: %s\n\n(Type and press Enter to continue)\n[Esc: cancel]",
-			headerStyle.Render("Creating new mock..."),
+			"%s %s  %s\n\n%s\n\n%s: %s\n\n(Type and press Enter to continue)\n[Esc: cancel]",
+			m.spinner.View(),
+			formHeaderStyle.Render("Creating new mock..."),
 			stepStyle.Render(fmt.Sprintf("Step %d/%d", m.formStep+1, totalFormSteps)),
-			label, value,
+			m.progress.ViewAs(percent),
+			label, fieldWithCursor(value, m.cursorVisible),
+		)
+		return borderStyle.Render(content)
+	case provisioningMode:
+		content := fmt.Sprintf(
+			"%s\n\n%s\n\n%s",
+			formHeaderStyle.Render("Configuring new mock..."),
+			stepStyle.Render("Reloading the mock server so it can serve "+m.pendingMock.title),
+			m.provisionProgress.View(),
 		)
 		return borderStyle.Render(content)
 	case listMode:
@@ -116,8 +141,20 @@ func (m model) View() string {
 				statusBadge = disabledStyle.Render("● Disabled")
 			}
 
+			// El sparkline va ANTES de "Response preview" a propósito: el
+			// preview ya se autolimita a 6 líneas + "…", pero si igual no
+			// entra todo en el panel, lipgloss trunca por abajo (MaxHeight
+			// más adelante) — así lo que se corta es la cola del preview, no
+			// el sparkline.
+			trafficLine := fmt.Sprintf(
+				"%s %s %s",
+				stepStyle.Render("Requests (5m):"),
+				trafficStyle.Render(sparkline(selected.trafficBuckets)),
+				stepStyle.Render(fmt.Sprintf("%d total", sumInts(selected.trafficBuckets))),
+			)
+
 			detailView = fmt.Sprintf(
-				"%s\n\n%s %s\n%s\n\n%s   %s\nStatus:     %s\nJSON File:  %s\n\nResponse preview:\n%s",
+				"%s\n\n%s %s\n%s\n\n%s   %s\nStatus:     %s\nJSON File:  %s\n\n%s\n\nResponse preview:\n%s",
 				headerStyle.Render("Details"),
 				coloredMethod,
 				path,
@@ -126,6 +163,7 @@ func (m model) View() string {
 				delayText(selected.delay),
 				selected.status,
 				selected.jsonFile,
+				trafficLine,
 				stepStyle.Render(previewJSON(selected.jsonFile)),
 			)
 		} else {
@@ -186,6 +224,52 @@ func delayText(delay string) string {
 		return style.Render("Responds immediately")
 	}
 	return "Responds in " + style.Render(delay+"ms")
+}
+
+// fieldWithCursor le agrega al valor de un campo del formulario un cursor de
+// edición al final (siempre al final: los campos sólo se editan por
+// append/backspace, nunca en medio). Reserva el espacio del bloque aunque
+// esté "apagado" para que el resto del contenido no salte al parpadear.
+func fieldWithCursor(value string, visible bool) string {
+	if visible {
+		return value + cursorStyle.Render(" ")
+	}
+	return value + " "
+}
+
+var sparkBlocks = []rune("▁▂▃▄▅▆▇█")
+
+// sparkline renderiza buckets (conteos por intervalo) como una franja de
+// caracteres de bloque Unicode escalada al máximo del propio slice, un bucket
+// por carácter (sin ejes ni labels: pensado para caber en el ancho angosto
+// del panel izquierdo).
+func sparkline(buckets []int) string {
+	if len(buckets) == 0 {
+		return ""
+	}
+	max := 0
+	for _, v := range buckets {
+		if v > max {
+			max = v
+		}
+	}
+	if max == 0 {
+		max = 1
+	}
+	runes := make([]rune, len(buckets))
+	for i, v := range buckets {
+		idx := v * (len(sparkBlocks) - 1) / max
+		runes[i] = sparkBlocks[idx]
+	}
+	return string(runes)
+}
+
+func sumInts(vals []int) int {
+	total := 0
+	for _, v := range vals {
+		total += v
+	}
+	return total
 }
 
 func previewJSON(path string) string {
