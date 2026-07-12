@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -42,6 +43,26 @@ func cursorTick() tea.Cmd {
 	})
 }
 
+// provisionTickMsg avanza la barra animada de provisioningMode. Mismo patrón
+// que el ejemplo progress-animated de bubbletea: cada tick suma
+// provisionIncrement a un acumulador SIN clampear; cuando supera 1.0 (un
+// tick después de haber llegado visualmente al 100%, dándole tiempo al
+// spring a asentarse) se cierra la pantalla e inserta el mock pendiente.
+// TODO: cuando server.go levante el mock server de verdad, este tick debería
+// esperar a que el server confirme el reload en vez de ser puro timer.
+type provisionTickMsg time.Time
+
+const (
+	provisionTickInterval = time.Second
+	provisionIncrement    = 0.25 // 4 ticks para llegar a 1.0 + 1 tick de margen ≈ 5s totales
+)
+
+func provisionTick() tea.Cmd {
+	return tea.Tick(provisionTickInterval, func(t time.Time) tea.Msg {
+		return provisionTickMsg(t)
+	})
+}
+
 func (m model) Init() tea.Cmd {
 	m.list.SetSize(120, 30)
 	return trafficTick()
@@ -67,6 +88,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.cursorVisible = !m.cursorVisible
 		return m, cursorTick()
+
+	case provisionTickMsg:
+		if m.currentMode != provisioningMode {
+			// dejar morir la cadena de ticks, igual que con el spinner/cursor.
+			return m, nil
+		}
+		m.provisionPercent += provisionIncrement
+		if m.provisionPercent > 1.0 {
+			// La barra ya llegó (y tuvo un tick de margen para asentarse
+			// visualmente): cerramos la pantalla e insertamos el mock.
+			cmd = m.list.InsertItem(len(m.list.Items()), m.pendingMock)
+			m.pendingMock = mockItem{}
+			m.provisionPercent = 0
+			m.currentMode = listMode
+			return m, cmd
+		}
+		cmd = m.provisionProgress.SetPercent(m.provisionPercent)
+		return m, tea.Batch(cmd, provisionTick())
+
+	case progress.FrameMsg:
+		if m.currentMode != provisioningMode {
+			return m, nil
+		}
+		newProgress, cmd := m.provisionProgress.Update(msg)
+		m.provisionProgress = newProgress.(progress.Model)
+		return m, cmd
 
 	case trafficTickMsg:
 		// Corre en cualquier modo: el tráfico "le llega al server" sin
@@ -172,8 +219,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case formStepDelay:
 					m.formStep = formStepJSONFile
 				case formStepJSONFile:
-					// Crear nuevo mockItem
-					newItem := mockItem{
+					// El mock queda armado pero no se inserta todavía: se
+					// guarda en pendingMock y recién se agrega a la lista
+					// cuando provisioningMode termina (ver provisionTickMsg
+					// más arriba), simulando el reload del mock server.
+					m.pendingMock = mockItem{
 						title:          m.formMethod + " " + m.formPath,
 						description:    "Status: " + m.formStatus + ", Delay: " + m.formDelay + "ms",
 						status:         m.formStatus,
@@ -182,13 +232,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						enabled:        true,
 						trafficBuckets: make([]int, trafficBucketCount), // mock recién creado: sin tráfico todavía
 					}
-					cmd = tea.Batch(cmd, m.list.InsertItem(len(m.list.Items()), newItem))
 
-					// Reset
-					m.currentMode = listMode
+					m.currentMode = provisioningMode
+					m.provisionPercent = 0
+					m.provisionProgress = newProvisionProgress()
 					m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
 					m.formStep = formStepPath
-					return m, cmd
+					return m, provisionTick()
 				}
 			case tea.KeyBackspace:
 				m.cursorVisible = true // no queda "apagado" a mitad de parpadeo mientras se edita

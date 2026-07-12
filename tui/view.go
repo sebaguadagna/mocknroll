@@ -90,6 +90,14 @@ func (m model) View() string {
 			label, fieldWithCursor(value, m.cursorVisible),
 		)
 		return borderStyle.Render(content)
+	case provisioningMode:
+		content := fmt.Sprintf(
+			"%s\n\n%s\n\n%s",
+			formHeaderStyle.Render("Configuring new mock..."),
+			stepStyle.Render("Reloading the mock server so it can serve "+m.pendingMock.title),
+			m.provisionProgress.View(),
+		)
+		return borderStyle.Render(content)
 	case listMode:
 		// Truncar por altura DESPUÉS de agregar el borde puede recortar justo
 		// la fila del borde de cierre (nos pasó). Por eso acotamos el

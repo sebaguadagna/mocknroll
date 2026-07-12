@@ -35,9 +35,10 @@ var (
 type mode int
 
 const (
-	listMode        mode = iota //0
-	formMode                    //1
-	confirmExitMode             // nuevo modo para confirmar salida
+	listMode         mode = iota //0
+	formMode                     //1
+	confirmExitMode              // nuevo modo para confirmar salida
+	provisioningMode             // pantalla de "configurando mock" tras cerrar el wizard, antes de volver a listMode
 )
 
 type mockItem struct {
@@ -60,21 +61,24 @@ func (m mockItem) Description() string { return m.description }
 func (m mockItem) FilterValue() string { return m.title }
 
 type model struct {
-	list           list.Model
-	spinner        spinner.Model
-	progress       progress.Model
-	width          int
-	listWidth      int
-	listHeight     int
-	currentMode    mode
-	formStep       int
-	formPath       string
-	formMethod     string
-	formStatus     string
-	formDelay      string
-	formJSONFile   string
-	cursorVisible  bool // parpadeo del cursor de texto en formMode, alternado por cursorTick (update.go)
-	trafficElapsed int  // segundos acumulados dentro del bucket en curso, compartido: todos los mocks rotan buckets al mismo tiempo
+	list              list.Model
+	spinner           spinner.Model
+	progress          progress.Model
+	provisionProgress progress.Model // barra ANIMADA (SetPercent + FrameMsg/harmonica) de provisioningMode; m.progress de arriba es la estática del wizard, no la reusamos para no pisar su estado
+	width             int
+	listWidth         int
+	listHeight        int
+	currentMode       mode
+	formStep          int
+	formPath          string
+	formMethod        string
+	formStatus        string
+	formDelay         string
+	formJSONFile      string
+	cursorVisible     bool     // parpadeo del cursor de texto en formMode, alternado por cursorTick (update.go)
+	trafficElapsed    int      // segundos acumulados dentro del bucket en curso, compartido: todos los mocks rotan buckets al mismo tiempo
+	pendingMock       mockItem // mock ya armado por el wizard, en espera de que termine provisioningMode para insertarse en la lista
+	provisionPercent  float64  // acumulador SIN clampear (a diferencia de progress.Model.Percent()) para poder detectar el overshoot que cierra la animación
 }
 
 // seedTrafficBuckets arranca el historial con datos simulados para que el
@@ -122,10 +126,20 @@ func initialModel() model {
 	pg := progress.New(progress.WithDefaultGradient(), progress.WithWidth(40))
 
 	return model{
-		list:        l,
-		spinner:     sp,
-		progress:    pg,
-		currentMode: listMode,
-		formStep:    0,
+		list:              l,
+		spinner:           sp,
+		progress:          pg,
+		provisionProgress: newProvisionProgress(),
+		currentMode:       listMode,
+		formStep:          0,
 	}
+}
+
+// newProvisionProgress arranca (o reinicia) la barra animada de
+// provisioningMode. Se recrea cada vez que se entra a ese modo en vez de
+// reusar la instancia anterior, para que el spring/percentShown internos
+// vuelvan a 0 y no arranque "a mitad de camino" si el usuario agrega más de
+// un mock en la misma sesión.
+func newProvisionProgress() progress.Model {
+	return progress.New(progress.WithDefaultGradient(), progress.WithWidth(44))
 }
