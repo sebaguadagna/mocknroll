@@ -63,6 +63,19 @@ func provisionTick() tea.Cmd {
 	})
 }
 
+// toggleDismissMsg cierra el popup de togglingMode. A diferencia de los demás
+// ticks de este archivo, es un disparo único (no se reprograma a sí mismo):
+// alcanza con un timer, no con una animación por pasos.
+type toggleDismissMsg time.Time
+
+const toggleDismissDelay = time.Second
+
+func toggleDismissAfter() tea.Cmd {
+	return tea.Tick(toggleDismissDelay, func(t time.Time) tea.Msg {
+		return toggleDismissMsg(t)
+	})
+}
+
 func (m model) Init() tea.Cmd {
 	m.list.SetSize(120, 30)
 	return trafficTick()
@@ -73,13 +86,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
-		if m.currentMode != formMode {
-			// dejar morir la cadena de ticks: no la seguimos re-programando
-			// una vez que salimos del formulario.
-			return m, nil
+		// Dos spinners independientes comparten este tipo de mensaje (bubbles
+		// lo permite: cada spinner.Model tiene su propio id y sólo reacciona
+		// a los ticks que arrancó). Cada uno sólo se re-programa mientras
+		// sigue siendo el modo activo; si no, dejamos morir esa cadena.
+		var cmds []tea.Cmd
+		if m.currentMode == formMode {
+			var c tea.Cmd
+			m.spinner, c = m.spinner.Update(msg)
+			cmds = append(cmds, c)
 		}
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		if m.currentMode == togglingMode {
+			var c tea.Cmd
+			m.toggleSpinner, c = m.toggleSpinner.Update(msg)
+			cmds = append(cmds, c)
+		}
+		return m, tea.Batch(cmds...)
+
+	case toggleDismissMsg:
+		if m.currentMode == togglingMode {
+			m.currentMode = listMode
+		}
+		return m, nil
 
 	case cursorTickMsg:
 		if m.currentMode != formMode {
@@ -150,6 +178,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// izquierdo (lo que se le pasa a lipgloss Width()/Height() en view.go).
 		// listHeight lo comparten ambos paneles.
 		m.width = msg.Width
+		m.height = msg.Height
 		m.listWidth = msg.Width * 6 / 10 // la lista es la superficie de navegación principal
 		m.listHeight = msg.Height - 3    // -3: borde (2) + 1 línea de margen de seguridad
 		// Lo que le pasamos al list es más chico: descontamos nuestro propio
@@ -183,7 +212,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if selected, ok := m.list.SelectedItem().(mockItem); ok {
 					selected.enabled = !selected.enabled
-					return m, m.list.SetItem(m.list.Index(), selected)
+					cmdSet := m.list.SetItem(m.list.Index(), selected)
+
+					m.currentMode = togglingMode
+					if selected.enabled {
+						m.toggleLabel = "Enabling..."
+					} else {
+						m.toggleLabel = "Disabling..."
+					}
+					return m, tea.Batch(cmdSet, m.toggleSpinner.Tick, toggleDismissAfter())
 				}
 			}
 

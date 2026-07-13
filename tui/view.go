@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 var (
@@ -17,20 +18,41 @@ var (
 			Foreground(lipgloss.Color("230")).
 			Padding(0, 1)
 
+	// mismo tono que el fondo de headerStyle (62), pero como color de texto
+	// en vez de sombreado: para líneas donde queremos "el mismo acento" sin
+	// el pill completo (fondo + padding).
+	shadeTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("62"))
+
 	// mismo color que list.NewDefaultDelegate() usa para el título del ítem
 	// seleccionado en la pantalla principal (SelectedTitle, #EE6FF8), para que
 	// el spinner y el encabezado del formulario se sientan "el mismo acento".
-	selectedAccent  = lipgloss.Color("#EE6FF8")
-	spinnerStyle    = lipgloss.NewStyle().Foreground(selectedAccent)
-	formHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(selectedAccent)
-	trafficStyle    = lipgloss.NewStyle().Foreground(selectedAccent)
-	cursorStyle     = lipgloss.NewStyle().Reverse(true) // bloque tipo terminal, mismo truco que bubbles/textinput
-	warnStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
-	stepStyle       = lipgloss.NewStyle().Faint(true)
-	enabledStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	disabledStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	borderStyle     = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
-	columnGap       = 2
+	selectedAccent     = lipgloss.Color("#EE6FF8")
+	spinnerStyle       = lipgloss.NewStyle().Foreground(selectedAccent)
+	formHeaderStyle    = lipgloss.NewStyle().Bold(true).Foreground(selectedAccent)
+	trafficStyle       = lipgloss.NewStyle().Foreground(selectedAccent)
+	cursorStyle        = lipgloss.NewStyle().Reverse(true) // bloque tipo terminal, mismo truco que bubbles/textinput
+	stepStyle          = lipgloss.NewStyle().Faint(true)
+	enabledStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	disabledStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	disabledTitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // fila roja en la lista para mocks con "t" desactivado
+	borderStyle        = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1, 2)
+
+	// SIN fondo: sólo borde y texto, para que el popup no tape la lista de
+	// atrás con un color sólido. Borde en el mismo tono que headerStyle (62),
+	// texto en blanco para que se lea bien encima de lo que sea que haya
+	// detrás. Todo el contenido de este popup tiene que quedar SIN estilo
+	// propio (ver toggleSpinner en model.go), para que este único Render()
+	// sea el que pinte de punta a punta y no queden "parches" de otro color.
+	togglePopupStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("15")).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("62")).
+				Padding(1, 3)
+
+	// Mismo estilo que togglePopupStyle, pero con el borde en rojo para que
+	// se note que es una confirmación destructiva.
+	exitPopupStyle = togglePopupStyle.BorderForeground(lipgloss.Color("9"))
+	columnGap      = 2
 
 	// Usados sólo en listMode: el contenido se acota (Width/Height/MaxWidth/
 	// MaxHeight) ANTES de agregar el borde, para garantizar que el borde de
@@ -54,11 +76,11 @@ var (
 func (m model) View() string {
 	switch m.currentMode {
 	case confirmExitMode:
-		content := fmt.Sprintf(
-			"%s\n\nAre you sure you want to quit? (y/n)",
-			warnStyle.Render("Quit mocknroll?"),
-		)
-		return borderStyle.Render(content)
+		// Popup superpuesto igual que togglingMode: el contenido va sin
+		// estilo propio para que el único Render() de exitPopupStyle sea el
+		// que pinte todo el bloque.
+		popup := exitPopupStyle.Render("Quit mocknroll?\n\nAre you sure you want to quit? (y/n)")
+		return overlayCenter(m.renderListView(), popup, m.listWidth+2)
 	case formMode:
 		// Modo formulario
 		label := ""
@@ -98,93 +120,106 @@ func (m model) View() string {
 			m.provisionProgress.View(),
 		)
 		return borderStyle.Render(content)
+	case togglingMode:
+		// Mismo fondo que listMode, con el popup superpuesto encima (ver
+		// overlayCenter): a diferencia de confirmExitMode/formMode/
+		// provisioningMode, acá el usuario tiene que seguir viendo la lista
+		// detrás mientras se "aplica" el toggle.
+		popup := togglePopupStyle.Render(fmt.Sprintf("%s %s", m.toggleSpinner.View(), m.toggleLabel))
+		return overlayCenter(m.renderListView(), popup, m.listWidth+2)
 	case listMode:
-		// Truncar por altura DESPUÉS de agregar el borde puede recortar justo
-		// la fila del borde de cierre (nos pasó). Por eso acotamos el
-		// contenido (padding incluido, sin borde) primero con Width/Height/
-		// MaxWidth/MaxHeight —todo en las mismas unidades, sin ambigüedad—, y
-		// recién then envolvemos el resultado YA acotado en el borde, que así
-		// nunca puede terminar recortado.
-
-		// Ayuda propia en vez de la del list: bubbles/help (vendored) no trunca
-		// bien su línea de ayuda en anchos angostos (deja de agregar el "…" y
-		// termina renderizando el texto completo sin límite), lo que rompe el
-		// layout entero. Width() de lipgloss sí hace word-wrap real.
-		hintLine := stepStyle.Render(fmt.Sprintf(
-			"%s %s • / filter • %s %s • %s %s",
-			addMockKey.Help().Key, addMockKey.Help().Desc,
-			toggleEnabledKey.Help().Key, toggleEnabledKey.Help().Desc,
-			quitKey.Help().Key, quitKey.Help().Desc,
-		))
-		listBody := m.list.View() + "\n\n" + hintLine
-		leftContent := panelPadding.
-			Width(m.listWidth).MaxWidth(m.listWidth).
-			Height(m.listHeight).MaxHeight(m.listHeight).
-			Render(listBody)
-		left := leftPanelBorder.Render(leftContent)
-
-		// Parte derecha: detalle
-		selected, ok := m.list.SelectedItem().(mockItem)
-		var detailView string
-		if ok {
-			method := m.formMethodIfEmpty(selected)
-			path := m.formPathIfEmpty(selected)
-			color := methodColor[method]
-			if color == "" {
-				color = "7"
-			}
-
-			coloredMethod := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(method)
-
-			statusBadge := enabledStyle.Render("● Enabled")
-			if !selected.enabled {
-				statusBadge = disabledStyle.Render("● Disabled")
-			}
-
-			// El sparkline va ANTES de "Response preview" a propósito: el
-			// preview ya se autolimita a 6 líneas + "…", pero si igual no
-			// entra todo en el panel, lipgloss trunca por abajo (MaxHeight
-			// más adelante) — así lo que se corta es la cola del preview, no
-			// el sparkline.
-			trafficLine := fmt.Sprintf(
-				"%s %s %s",
-				stepStyle.Render("Requests (5m):"),
-				trafficStyle.Render(sparkline(selected.trafficBuckets)),
-				stepStyle.Render(fmt.Sprintf("%d total", sumInts(selected.trafficBuckets))),
-			)
-
-			detailView = fmt.Sprintf(
-				"%s\n\n%s %s\n%s\n\n%s   %s\nStatus:     %s\nJSON File:  %s\n\n%s\n\nResponse preview:\n%s",
-				headerStyle.Render("Details"),
-				coloredMethod,
-				path,
-				selected.description,
-				statusBadge,
-				delayText(selected.delay),
-				selected.status,
-				selected.jsonFile,
-				trafficLine,
-				stepStyle.Render(previewJSON(selected.jsonFile)),
-			)
-		} else {
-			detailView = "Seleccioná un mock para ver detalles"
-		}
-
-		// m.listWidth+2: ancho total ya renderizado del panel izquierdo (borde
-		// incluido), para calcular cuánto le queda disponible al derecho.
-		rightContentWidth := m.width - (m.listWidth + 2) - columnGap - 2
-		if rightContentWidth < 10 {
-			rightContentWidth = 10
-		}
-		rightContent := panelPadding.
-			Width(rightContentWidth).MaxWidth(rightContentWidth).
-			Height(m.listHeight).MaxHeight(m.listHeight).
-			Render(detailView)
-		right := rightPanelBorder.Render(rightContent)
-
-		return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", columnGap), right)
+		return m.renderListView()
 	}
 	return ""
+}
+
+func (m model) renderListView() string {
+	// Truncar por altura DESPUÉS de agregar el borde puede recortar justo
+	// la fila del borde de cierre (nos pasó). Por eso acotamos el
+	// contenido (padding incluido, sin borde) primero con Width/Height/
+	// MaxWidth/MaxHeight —todo en las mismas unidades, sin ambigüedad—, y
+	// recién then envolvemos el resultado YA acotado en el borde, que así
+	// nunca puede terminar recortado.
+
+	// Ayuda propia en vez de la del list: bubbles/help (vendored) no trunca
+	// bien su línea de ayuda en anchos angostos (deja de agregar el "…" y
+	// termina renderizando el texto completo sin límite), lo que rompe el
+	// layout entero. Width() de lipgloss sí hace word-wrap real.
+	// shadeTextStyle: mismo tono que el sombreado de "Details"/"Mocks loaded",
+	// pero como color de texto, sin el pill de fondo.
+	hintLine := shadeTextStyle.Render(fmt.Sprintf(
+		"%s: %s • filter: / • %s: %s • %s: %s",
+		addMockKey.Help().Desc, addMockKey.Help().Key,
+		toggleEnabledKey.Help().Desc, toggleEnabledKey.Help().Key,
+		quitKey.Help().Desc, quitKey.Help().Key,
+	))
+	listBody := m.list.View() + "\n\n" + hintLine
+	leftContent := panelPadding.
+		Width(m.listWidth).MaxWidth(m.listWidth).
+		Height(m.listHeight).MaxHeight(m.listHeight).
+		Render(listBody)
+	left := leftPanelBorder.Render(leftContent)
+
+	// Parte derecha: detalle
+	selected, ok := m.list.SelectedItem().(mockItem)
+	var detailView string
+	if ok {
+		method := m.formMethodIfEmpty(selected)
+		path := m.formPathIfEmpty(selected)
+		color := methodColor[method]
+		if color == "" {
+			color = "7"
+		}
+
+		coloredMethod := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(method)
+
+		statusBadge := enabledStyle.Render("● Enabled")
+		if !selected.enabled {
+			statusBadge = disabledStyle.Render("● Disabled")
+		}
+
+		// El sparkline va ANTES de "Response preview" a propósito: el
+		// preview ya se autolimita a 6 líneas + "…", pero si igual no
+		// entra todo en el panel, lipgloss trunca por abajo (MaxHeight
+		// más adelante) — así lo que se corta es la cola del preview, no
+		// el sparkline.
+		trafficLine := fmt.Sprintf(
+			"%s %s %s",
+			stepStyle.Render("Requests (5m):"),
+			trafficStyle.Render(sparkline(selected.trafficBuckets)),
+			stepStyle.Render(fmt.Sprintf("%d total", sumInts(selected.trafficBuckets))),
+		)
+
+		detailView = fmt.Sprintf(
+			"%s\n\n%s %s\n%s\n\n%s   %s\nStatus:     %s\nJSON File:  %s\n\n%s\n\nResponse preview:\n%s",
+			headerStyle.Render("Details"),
+			coloredMethod,
+			path,
+			selected.description,
+			statusBadge,
+			delayText(selected.delay),
+			selected.status,
+			selected.jsonFile,
+			trafficLine,
+			stepStyle.Render(previewJSON(selected.jsonFile)),
+		)
+	} else {
+		detailView = "Seleccioná un mock para ver detalles"
+	}
+
+	// m.listWidth+2: ancho total ya renderizado del panel izquierdo (borde
+	// incluido), para calcular cuánto le queda disponible al derecho.
+	rightContentWidth := m.width - (m.listWidth + 2) - columnGap - 2
+	if rightContentWidth < 10 {
+		rightContentWidth = 10
+	}
+	rightContent := panelPadding.
+		Width(rightContentWidth).MaxWidth(rightContentWidth).
+		Height(m.listHeight).MaxHeight(m.listHeight).
+		Render(detailView)
+	right := rightPanelBorder.Render(rightContent)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", columnGap), right)
 }
 
 func (m model) formPathIfEmpty(item mockItem) string {
@@ -290,4 +325,50 @@ func previewJSON(path string) string {
 		out += "\n…"
 	}
 	return out
+}
+
+// overlayCenter superpone fg sobre bg, centrado horizontalmente dentro de
+// centerWidth (no del ancho total de bg) y verticalmente en toda la altura de
+// bg. lipgloss (v1, la versión acá vendorizada) no tiene compositing con
+// z-index, así que esto empalma línea a línea "a mano": cada fila de bg se
+// recorta con ansi.Cut, que —a diferencia de un slice de string plano—
+// entiende los códigos ANSI y no los rompe ni los pierde, así que el
+// color/borde de lo que quede a los costados de fg sigue intacto.
+//
+// centerWidth es el ancho del panel izquierdo (con borde), no m.width entero:
+// si centráramos sobre las dos columnas completas, un popup con texto largo
+// (p.ej. la confirmación de salida) termina pisando el borde del panel
+// derecho a la mitad de una fila en vez de quedar contenido en uno de los dos.
+func overlayCenter(bg, fg string, centerWidth int) string {
+	bgHeight := lipgloss.Height(bg)
+	fgWidth := lipgloss.Width(fg)
+	fgHeight := lipgloss.Height(fg)
+
+	x := max(0, (centerWidth-fgWidth)/2)
+	y := max(0, (bgHeight-fgHeight)/2)
+
+	bgLines := strings.Split(bg, "\n")
+	fgLines := strings.Split(fg, "\n")
+	for i, fgLine := range fgLines {
+		row := y + i
+		if row < 0 || row >= len(bgLines) {
+			continue
+		}
+		fgLineWidth := lipgloss.Width(fgLine)
+
+		bgLine := bgLines[row]
+		bgLineWidth := lipgloss.Width(bgLine)
+		if pad := x + fgLineWidth - bgLineWidth; pad > 0 {
+			// La fila de fondo termina antes de donde arranca el popup (pasa
+			// en las últimas filas, más cortas que el resto del panel): la
+			// completamos con espacios en blanco antes de cortarla.
+			bgLine += strings.Repeat(" ", pad)
+			bgLineWidth += pad
+		}
+
+		left := ansi.Cut(bgLine, 0, x)
+		right := ansi.Cut(bgLine, x+fgLineWidth, bgLineWidth)
+		bgLines[row] = left + fgLine + right
+	}
+	return strings.Join(bgLines, "\n")
 }
