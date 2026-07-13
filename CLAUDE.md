@@ -17,7 +17,7 @@ Note: `package.json` / `package-lock.json` at the repo root are stray/empty and 
 
 ## Architecture
 
-Terminal UI built on the Bubble Tea Elm architecture (`charmbracelet/bubbletea`, `bubbles`, `lipgloss`). Entry point `main.go` calls `tui.Start()` (`tui/start.go`), which runs `tea.NewProgram(initialModel())` in alt-screen mode.
+Terminal UI built on the Bubble Tea Elm architecture (bubbletea/bubbles/lipgloss v2, imported as `charm.land/{bubbletea,lipgloss,bubbles}/v2` — the v2 line moved its canonical module path off `github.com/charmbracelet/...`). Entry point `main.go` calls `tui.Start()` (`tui/start.go`), which runs `tea.NewProgram(initialModel())`. Alt-screen mode is set per-frame via `tea.View.AltScreen = true` inside `View()` (`tui/view.go`), not as a `tea.NewProgram` option.
 
 The `tui` package is split by Elm-architecture role:
 - `model.go` — `model` struct (app state) and `mockItem` (a configured mock: title/description/status/delay/jsonFile), plus `initialModel()`.
