@@ -15,6 +15,10 @@ CI (`.github/workflows/ci.yml`) runs `go build ./...` and `go test ./...` on pus
 
 Note: `package.json` / `package-lock.json` at the repo root are stray/empty and unrelated to this Go module — there is no JS toolchain here.
 
+## Workflow
+
+For any new feature (not small fixes/tweaks): first use the `spec-driven-workflow` skill to write a spec and acceptance criteria, then enter Plan Mode to research and design the implementation approach and get it approved, and only then implement.
+
 ## Architecture
 
 Terminal UI built on the Bubble Tea Elm architecture (bubbletea/bubbles/lipgloss v2, imported as `charm.land/{bubbletea,lipgloss,bubbles}/v2` — the v2 line moved its canonical module path off `github.com/charmbracelet/...`). Entry point `main.go` calls `tui.Start()` (`tui/start.go`), which runs `tea.NewProgram(initialModel())`. Alt-screen mode is set per-frame via `tea.View.AltScreen = true` inside `View()` (`tui/view.go`), not as a `tea.NewProgram` option.
