@@ -3,18 +3,18 @@ package tui
 import (
 	"math/rand"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/spinner"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
 )
 
-// trafficBucketCount * trafficBucketDuration = ventana total mostrada (5 min).
-// TODO: reemplazar por conteo real de requests una vez que server.go sirva
-// los mocks; por ahora se simula tráfico para probar la visualización.
+// trafficBucketCount * trafficBucketDuration = total window shown (5 min).
+// TODO: replace with real request counts once server.go actually serves
+// the mocks; for now traffic is simulated to test the visualization.
 const (
 	trafficBucketCount    = 30
-	trafficBucketDuration = 10 // segundos por bucket
+	trafficBucketDuration = 10 // seconds per bucket
 )
 
 var (
@@ -37,9 +37,9 @@ type mode int
 const (
 	listMode         mode = iota //0
 	formMode                     //1
-	confirmExitMode              // nuevo modo para confirmar salida
-	provisioningMode             // pantalla de "configurando mock" tras cerrar el wizard, antes de volver a listMode
-	togglingMode                 // popup superpuesto a listMode mientras "t" habilita/deshabilita un mock
+	confirmExitMode              // mode for confirming exit
+	provisioningMode             // "configuring mock" screen after closing the wizard, before returning to listMode
+	togglingMode                 // popup overlaid on listMode while "t" enables/disables a mock
 )
 
 type mockItem struct {
@@ -49,16 +49,16 @@ type mockItem struct {
 	delay          string
 	jsonFile       string
 	enabled        bool
-	trafficBuckets []int // requests por bucket de trafficBucketDuration segundos, uno por mock; el último es el bucket "en curso"
+	trafficBuckets []int // requests per trafficBucketDuration-second bucket, one per mock; the last one is the "in progress" bucket
 }
 
 func (m mockItem) Title() string {
 	if !m.enabled {
-		// Coloreamos todo el string ANTES de que list.DefaultDelegate lo
-		// envuelva en su propio estilo (Normal/SelectedTitle): como acá sólo
-		// tocamos Foreground (nunca Background), el reset final de este
-		// Render() no pisa el padding/borde que agrega el delegate por
-		// afuera, sólo el color del texto.
+		// We color the whole string BEFORE list.DefaultDelegate wraps it in
+		// its own style (Normal/SelectedTitle): since we only touch
+		// Foreground here (never Background), this Render()'s final reset
+		// doesn't clobber the padding/border the delegate adds around it,
+		// only the text color.
 		return disabledTitleStyle.Render(m.title + " (disabled)")
 	}
 	return m.title
@@ -70,10 +70,10 @@ type model struct {
 	list              list.Model
 	spinner           spinner.Model
 	progress          progress.Model
-	provisionProgress progress.Model // barra ANIMADA (SetPercent + FrameMsg/harmonica) de provisioningMode; m.progress de arriba es la estática del wizard, no la reusamos para no pisar su estado
-	toggleSpinner     spinner.Model  // spinner del popup de togglingMode, aparte de m.spinner (form) para no compartir su ciclo de vida
+	provisionProgress progress.Model // ANIMATED bar (SetPercent + FrameMsg/harmonica) for provisioningMode; m.progress above is the wizard's static one — not reused, so we don't clobber its state
+	toggleSpinner     spinner.Model  // spinner for togglingMode's popup, separate from m.spinner (form) so they don't share a lifecycle
 	width             int
-	height            int // alto total de terminal (msg.Height crudo), lo necesita el overlay de togglingMode para centrar el popup en toda la pantalla, no sólo en el panel izquierdo
+	height            int // total terminal height (raw msg.Height), needed by togglingMode's overlay to center the popup across the whole screen, not just the left panel
 	listWidth         int
 	listHeight        int
 	currentMode       mode
@@ -83,16 +83,16 @@ type model struct {
 	formStatus        string
 	formDelay         string
 	formJSONFile      string
-	cursorVisible     bool     // parpadeo del cursor de texto en formMode, alternado por cursorTick (update.go)
-	trafficElapsed    int      // segundos acumulados dentro del bucket en curso, compartido: todos los mocks rotan buckets al mismo tiempo
-	pendingMock       mockItem // mock ya armado por el wizard, en espera de que termine provisioningMode para insertarse en la lista
-	provisionPercent  float64  // acumulador SIN clampear (a diferencia de progress.Model.Percent()) para poder detectar el overshoot que cierra la animación
-	toggleLabel       string   // "Enabling..."/"Disabling...", el texto que muestra el popup de togglingMode
+	cursorVisible     bool     // text cursor blink in formMode, toggled by cursorTick (update.go)
+	trafficElapsed    int      // seconds accumulated within the current bucket, shared: all mocks roll buckets at the same time
+	pendingMock       mockItem // mock already built by the wizard, waiting for provisioningMode to finish before it's inserted into the list
+	provisionPercent  float64  // UNclamped accumulator (unlike progress.Model.Percent()) so we can detect the overshoot that closes the animation
+	toggleLabel       string   // "Enabling..."/"Disabling...", the text togglingMode's popup shows
 }
 
-// seedTrafficBuckets arranca el historial con datos simulados para que el
-// sparkline de un mock no empiece en cero; trafficTick (update.go) lo va
-// rotando en vivo.
+// seedTrafficBuckets starts the history with simulated data so a mock's
+// sparkline doesn't begin at zero; trafficTick (update.go) rolls it
+// live from there.
 func seedTrafficBuckets() []int {
 	buckets := make([]int, trafficBucketCount)
 	for i := range buckets {
@@ -123,22 +123,22 @@ func initialModel() model {
 		},
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 30, 10) // valores temporales visibles
+	l := list.New(items, list.NewDefaultDelegate(), 30, 10) // temporary, visible-enough values
 	l.Title = "Mocks loaded"
-	l.KeyMap.Quit.SetEnabled(false) // reemplazado por quitKey: q/esc piden confirmación
-	l.SetShowHelp(false)            // el help propio del list no trunca bien en anchos angostos (bug de la lib); usamos el nuestro en view.go
+	l.KeyMap.Quit.SetEnabled(false) // replaced by quitKey: q/esc ask for confirmation
+	l.SetShowHelp(false)            // the list's own help doesn't truncate well at narrow widths (lib bug); we use our own in view.go
 
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(spinnerStyle))
 
-	// spinner distinto (Points en vez de Dot) para que el popup de
-	// habilitar/deshabilitar se sienta un elemento aparte del wizard. Sin
-	// WithStyle a propósito: va sin color propio para que togglePopupStyle
-	// (view.go) sea la única fuente de color del popup, de punta a punta.
+	// a different spinner (Points instead of Dot) so the enable/disable
+	// popup feels like a separate element from the wizard. No WithStyle on
+	// purpose: it has no color of its own, so togglePopupStyle (view.go) is
+	// the single source of color for the popup, start to finish.
 	tsp := spinner.New(spinner.WithSpinner(spinner.Points))
 
-	// progress-static: sin Update()/Tick, se renderiza con ViewAs(percent) a
-	// partir de m.formStep en cada View(), sin animación propia.
-	pg := progress.New(progress.WithDefaultGradient(), progress.WithWidth(40))
+	// static progress: no Update()/Tick, rendered with ViewAs(percent)
+	// derived from m.formStep on every View(), with no animation of its own.
+	pg := progress.New(progress.WithDefaultBlend(), progress.WithWidth(40))
 
 	return model{
 		list:              l,
@@ -151,11 +151,11 @@ func initialModel() model {
 	}
 }
 
-// newProvisionProgress arranca (o reinicia) la barra animada de
-// provisioningMode. Se recrea cada vez que se entra a ese modo en vez de
-// reusar la instancia anterior, para que el spring/percentShown internos
-// vuelvan a 0 y no arranque "a mitad de camino" si el usuario agrega más de
-// un mock en la misma sesión.
+// newProvisionProgress starts (or resets) provisioningMode's animated
+// bar. It's recreated every time that mode is entered instead of reusing
+// the previous instance, so the internal spring/percentShown reset to 0
+// and it doesn't start "mid-way" if the user adds more than one mock in
+// the same session.
 func newProvisionProgress() progress.Model {
-	return progress.New(progress.WithDefaultGradient(), progress.WithWidth(44))
+	return progress.New(progress.WithDefaultBlend(), progress.WithWidth(44))
 }

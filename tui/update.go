@@ -4,13 +4,13 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
 )
 
-// Constantes para los pasos del formulario
+// Constants for the form steps
 const (
 	formStepPath = iota
 	formStepMethod
@@ -20,9 +20,9 @@ const (
 	totalFormSteps
 )
 
-// trafficTickMsg simula la llegada de requests a los mocks servidos, un
-// segundo a la vez. Cuando server.go sirva tráfico real, esto se reemplaza
-// por eventos genuinos en vez de un tea.Tick.
+// trafficTickMsg simulates requests arriving at the served mocks, one
+// second at a time. Once server.go serves real traffic, this gets
+// replaced by genuine events instead of a tea.Tick.
 type trafficTickMsg time.Time
 
 func trafficTick() tea.Cmd {
@@ -31,8 +31,8 @@ func trafficTick() tea.Cmd {
 	})
 }
 
-// cursorTickMsg alterna la visibilidad del cursor de texto en el campo activo
-// del formulario (mismo intervalo que usa bubbles/textinput por defecto).
+// cursorTickMsg toggles the text cursor's visibility in the form's active
+// field (same interval bubbles/textinput uses by default).
 type cursorTickMsg time.Time
 
 const cursorBlinkInterval = 530 * time.Millisecond
@@ -43,18 +43,19 @@ func cursorTick() tea.Cmd {
 	})
 }
 
-// provisionTickMsg avanza la barra animada de provisioningMode. Mismo patrón
-// que el ejemplo progress-animated de bubbletea: cada tick suma
-// provisionIncrement a un acumulador SIN clampear; cuando supera 1.0 (un
-// tick después de haber llegado visualmente al 100%, dándole tiempo al
-// spring a asentarse) se cierra la pantalla e inserta el mock pendiente.
-// TODO: cuando server.go levante el mock server de verdad, este tick debería
-// esperar a que el server confirme el reload en vez de ser puro timer.
+// provisionTickMsg advances provisioningMode's animated bar. Same pattern
+// as bubbletea's progress-animated example: each tick adds
+// provisionIncrement to an UNclamped accumulator; once it passes 1.0 (one
+// tick after visually reaching 100%, giving the spring time to settle)
+// the screen closes and the pending mock gets inserted.
+// TODO: once server.go actually spins up the mock server, this tick
+// should wait for the server to confirm the reload instead of being a
+// plain timer.
 type provisionTickMsg time.Time
 
 const (
 	provisionTickInterval = time.Second
-	provisionIncrement    = 0.25 // 4 ticks para llegar a 1.0 + 1 tick de margen ≈ 5s totales
+	provisionIncrement    = 0.25 // 4 ticks to reach 1.0 + 1 tick of margin ≈ 5s total
 )
 
 func provisionTick() tea.Cmd {
@@ -63,9 +64,9 @@ func provisionTick() tea.Cmd {
 	})
 }
 
-// toggleDismissMsg cierra el popup de togglingMode. A diferencia de los demás
-// ticks de este archivo, es un disparo único (no se reprograma a sí mismo):
-// alcanza con un timer, no con una animación por pasos.
+// toggleDismissMsg closes togglingMode's popup. Unlike this file's other
+// ticks, it's a one-shot (it doesn't reschedule itself): a plain timer is
+// enough, no step-by-step animation needed.
 type toggleDismissMsg time.Time
 
 const toggleDismissDelay = time.Second
@@ -86,10 +87,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
-		// Dos spinners independientes comparten este tipo de mensaje (bubbles
-		// lo permite: cada spinner.Model tiene su propio id y sólo reacciona
-		// a los ticks que arrancó). Cada uno sólo se re-programa mientras
-		// sigue siendo el modo activo; si no, dejamos morir esa cadena.
+		// Two independent spinners share this message type (bubbles allows it:
+		// each spinner.Model has its own id and only reacts to the ticks it
+		// started). Each one only reschedules itself while it's still the
+		// active mode; otherwise we let that chain die.
 		var cmds []tea.Cmd
 		if m.currentMode == formMode {
 			var c tea.Cmd
@@ -111,7 +112,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case cursorTickMsg:
 		if m.currentMode != formMode {
-			// dejar morir la cadena de ticks, igual que con el spinner.
+			// let the tick chain die, same as with the spinner.
 			return m, nil
 		}
 		m.cursorVisible = !m.cursorVisible
@@ -119,13 +120,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case provisionTickMsg:
 		if m.currentMode != provisioningMode {
-			// dejar morir la cadena de ticks, igual que con el spinner/cursor.
+			// let the tick chain die, same as with the spinner/cursor.
 			return m, nil
 		}
 		m.provisionPercent += provisionIncrement
 		if m.provisionPercent > 1.0 {
-			// La barra ya llegó (y tuvo un tick de margen para asentarse
-			// visualmente): cerramos la pantalla e insertamos el mock.
+			// The bar has already arrived (and had a margin tick to settle
+			// visually): close the screen and insert the mock.
 			cmd = m.list.InsertItem(len(m.list.Items()), m.pendingMock)
 			m.pendingMock = mockItem{}
 			m.provisionPercent = 0
@@ -140,14 +141,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		newProgress, cmd := m.provisionProgress.Update(msg)
-		m.provisionProgress = newProgress.(progress.Model)
+		m.provisionProgress = newProgress
 		return m, cmd
 
 	case trafficTickMsg:
-		// Corre en cualquier modo: el tráfico "le llega al server" sin
-		// importar qué esté mirando el usuario en la TUI. Es por mock (cada
-		// API mockeada tiene su propio historial), pero todos rotan de
-		// bucket juntos, así que el corte de los 10s es compartido.
+		// Runs in any mode: traffic "arrives at the server" regardless of
+		// what the user is looking at in the TUI. It's per-mock (each
+		// mocked API has its own history), but they all roll buckets
+		// together, so the 10s cutoff is shared.
 		m.trafficElapsed++
 		roll := m.trafficElapsed >= trafficBucketDuration
 		if roll {
@@ -163,7 +164,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if mi.enabled {
 				last := len(mi.trafficBuckets) - 1
-				mi.trafficBuckets[last] += rand.Intn(4) // 0-3 requests simulados este segundo, por mock
+				mi.trafficBuckets[last] += rand.Intn(4) // 0-3 simulated requests this second, per mock
 			}
 			if roll {
 				mi.trafficBuckets = append(mi.trafficBuckets[1:], 0)
@@ -174,19 +175,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, trafficTick())
 
 	case tea.WindowSizeMsg:
-		// listWidth/listHeight: ancho/alto de CONTENIDO CON padding para el panel
-		// izquierdo (lo que se le pasa a lipgloss Width()/Height() en view.go).
-		// listHeight lo comparten ambos paneles.
+		// listWidth/listHeight: content width/height WITH padding for the left
+		// panel (what gets passed to lipgloss Width()/Height() in view.go).
+		// listHeight is shared by both panels.
 		m.width = msg.Width
 		m.height = msg.Height
-		m.listWidth = msg.Width * 6 / 10 // la lista es la superficie de navegación principal
-		m.listHeight = msg.Height - 3    // -3: borde (2) + 1 línea de margen de seguridad
-		// Lo que le pasamos al list es más chico: descontamos nuestro propio
-		// padding (2 cols/filas por lado) y 2 filas para nuestra línea de ayuda.
+		m.listWidth = msg.Width * 6 / 10 // the list is the main navigation surface
+		m.listHeight = msg.Height - 3    // -3: border (2) + 1 line of safety margin
+		// What we pass to the list is smaller: we subtract our own padding
+		// (2 cols/rows per side) and 2 rows for our own help line.
 		m.list.SetSize(m.listWidth-4, m.listHeight-4)
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.currentMode {
 
 		// LIST MODE
@@ -194,7 +195,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "q", "Q", "esc":
 				if m.list.FilterState() == list.Filtering {
-					break // dejar que el list maneje la tecla (escribir "q" o cancelar el filtro con esc)
+					break // let the list handle the key (typing "q" or canceling the filter with esc)
 				}
 				m.currentMode = confirmExitMode
 				return m, nil
@@ -208,7 +209,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(m.spinner.Tick, cursorTick())
 			case "t":
 				if m.list.FilterState() == list.Filtering {
-					break // dejar que el list escriba la "t" en el filtro
+					break // let the list write the "t" into the filter
 				}
 				if selected, ok := m.list.SelectedItem().(mockItem); ok {
 					selected.enabled = !selected.enabled
@@ -228,24 +229,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case confirmExitMode:
 			switch msg.String() {
 			case "y", "Y":
-				// Confirmar salida
+				// Confirm exit
 				return m, tea.Quit
 			case "n", "N", "esc":
-				// Cancelar salida y volver al modo lista
+				// Cancel exit and go back to list mode
 				m.currentMode = listMode
 				return m, nil
 			}
 
 		// FORM MODE
 		case formMode:
-			switch msg.Type {
+			switch msg.Code {
 			case tea.KeyEsc:
 				m.currentMode = listMode
 				m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
 				m.formStep = formStepPath
 				return m, nil
 			case tea.KeyEnter:
-				m.cursorVisible = true // reaparece de entrada en el campo siguiente, en vez de arrancar a mitad de parpadeo
+				m.cursorVisible = true // reappears right away in the next field, instead of starting mid-blink
 				switch m.formStep {
 				case formStepPath:
 					m.formStep = formStepMethod
@@ -256,10 +257,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case formStepDelay:
 					m.formStep = formStepJSONFile
 				case formStepJSONFile:
-					// El mock queda armado pero no se inserta todavía: se
-					// guarda en pendingMock y recién se agrega a la lista
-					// cuando provisioningMode termina (ver provisionTickMsg
-					// más arriba), simulando el reload del mock server.
+					// The mock is built but not inserted yet: it's stored in
+					// pendingMock and only added to the list once provisioningMode
+					// finishes (see provisionTickMsg above), simulating the mock
+					// server's reload.
 					m.pendingMock = mockItem{
 						title:          m.formMethod + " " + m.formPath,
 						description:    "Status: " + m.formStatus + ", Delay: " + m.formDelay + "ms",
@@ -267,7 +268,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						delay:          m.formDelay,
 						jsonFile:       m.formJSONFile,
 						enabled:        true,
-						trafficBuckets: make([]int, trafficBucketCount), // mock recién creado: sin tráfico todavía
+						trafficBuckets: make([]int, trafficBucketCount), // freshly created mock: no traffic yet
 					}
 
 					m.currentMode = provisioningMode
@@ -278,8 +279,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, provisionTick()
 				}
 			case tea.KeyBackspace:
-				m.cursorVisible = true // no queda "apagado" a mitad de parpadeo mientras se edita
-				// Permitir borrar carácter
+				m.cursorVisible = true // doesn't stay "off" mid-blink while editing
+				// Allow deleting a character
 				switch m.formStep {
 				case formStepPath:
 					if len(m.formPath) > 0 {
@@ -304,25 +305,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			default:
-				// Solo texto imprimible (runas sueltas o espacio) va a los campos;
-				// cualquier otra tecla especial (flechas, tab, ctrl+c, F1, ...) se ignora
-				// en vez de insertarse como texto literal (era el bug: "up", "tab", etc.
-				// terminaban dentro del campo).
-				if msg.Type != tea.KeyRunes && msg.Type != tea.KeySpace {
+				// Only printable text goes into the fields; any other special key
+				// (arrows, tab, ctrl+c, F1, ...) is ignored instead of being
+				// inserted as literal text (that was the bug: "up", "tab", etc.
+				// used to end up inside the field). msg.Text is only populated
+				// for keys that represent printable characters.
+				if msg.Text == "" {
 					break
 				}
-				m.cursorVisible = true // idem: visible de entrada al tipear, no a mitad de parpadeo
+				m.cursorVisible = true // same idea: visible right away when typing, not mid-blink
 				switch m.formStep {
 				case formStepPath:
-					m.formPath += msg.String()
+					m.formPath += msg.Text
 				case formStepMethod:
-					m.formMethod += msg.String()
+					m.formMethod += msg.Text
 				case formStepStatus:
-					m.formStatus += msg.String()
+					m.formStatus += msg.Text
 				case formStepDelay:
-					m.formDelay += msg.String()
+					m.formDelay += msg.Text
 				case formStepJSONFile:
-					m.formJSONFile += msg.String()
+					m.formJSONFile += msg.Text
 				}
 			}
 		}
