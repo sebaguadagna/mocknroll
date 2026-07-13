@@ -39,6 +39,7 @@ const (
 	formMode                     //1
 	confirmExitMode              // nuevo modo para confirmar salida
 	provisioningMode             // pantalla de "configurando mock" tras cerrar el wizard, antes de volver a listMode
+	togglingMode                 // popup superpuesto a listMode mientras "t" habilita/deshabilita un mock
 )
 
 type mockItem struct {
@@ -53,7 +54,12 @@ type mockItem struct {
 
 func (m mockItem) Title() string {
 	if !m.enabled {
-		return m.title + " (disabled)"
+		// Coloreamos todo el string ANTES de que list.DefaultDelegate lo
+		// envuelva en su propio estilo (Normal/SelectedTitle): como acá sólo
+		// tocamos Foreground (nunca Background), el reset final de este
+		// Render() no pisa el padding/borde que agrega el delegate por
+		// afuera, sólo el color del texto.
+		return disabledTitleStyle.Render(m.title + " (disabled)")
 	}
 	return m.title
 }
@@ -65,7 +71,9 @@ type model struct {
 	spinner           spinner.Model
 	progress          progress.Model
 	provisionProgress progress.Model // barra ANIMADA (SetPercent + FrameMsg/harmonica) de provisioningMode; m.progress de arriba es la estática del wizard, no la reusamos para no pisar su estado
+	toggleSpinner     spinner.Model  // spinner del popup de togglingMode, aparte de m.spinner (form) para no compartir su ciclo de vida
 	width             int
+	height            int // alto total de terminal (msg.Height crudo), lo necesita el overlay de togglingMode para centrar el popup en toda la pantalla, no sólo en el panel izquierdo
 	listWidth         int
 	listHeight        int
 	currentMode       mode
@@ -79,6 +87,7 @@ type model struct {
 	trafficElapsed    int      // segundos acumulados dentro del bucket en curso, compartido: todos los mocks rotan buckets al mismo tiempo
 	pendingMock       mockItem // mock ya armado por el wizard, en espera de que termine provisioningMode para insertarse en la lista
 	provisionPercent  float64  // acumulador SIN clampear (a diferencia de progress.Model.Percent()) para poder detectar el overshoot que cierra la animación
+	toggleLabel       string   // "Enabling..."/"Disabling...", el texto que muestra el popup de togglingMode
 }
 
 // seedTrafficBuckets arranca el historial con datos simulados para que el
@@ -121,6 +130,12 @@ func initialModel() model {
 
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(spinnerStyle))
 
+	// spinner distinto (Points en vez de Dot) para que el popup de
+	// habilitar/deshabilitar se sienta un elemento aparte del wizard. Sin
+	// WithStyle a propósito: va sin color propio para que togglePopupStyle
+	// (view.go) sea la única fuente de color del popup, de punta a punta.
+	tsp := spinner.New(spinner.WithSpinner(spinner.Points))
+
 	// progress-static: sin Update()/Tick, se renderiza con ViewAs(percent) a
 	// partir de m.formStep en cada View(), sin animación propia.
 	pg := progress.New(progress.WithDefaultGradient(), progress.WithWidth(40))
@@ -130,6 +145,7 @@ func initialModel() model {
 		spinner:           sp,
 		progress:          pg,
 		provisionProgress: newProvisionProgress(),
+		toggleSpinner:     tsp,
 		currentMode:       listMode,
 		formStep:          0,
 	}
