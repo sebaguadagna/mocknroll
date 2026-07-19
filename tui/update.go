@@ -1,13 +1,13 @@
 package tui
 
 import (
-	"math/rand"
 	"time"
 
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"github.com/sebaguadagna/mocknroll/server"
 )
 
 // Constants for the form steps
@@ -128,6 +128,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The bar has already arrived (and had a margin tick to settle
 			// visually): close the screen and insert the mock.
 			cmd = m.list.InsertItem(len(m.list.Items()), m.pendingMock)
+			m.updateServer() // update server registry with newly provisioned mock
 			m.pendingMock = mockItem{}
 			m.provisionPercent = 0
 			m.currentMode = listMode
@@ -155,6 +156,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.trafficElapsed = 0
 		}
 
+		counts := server.GetAndResetRequestCounts()
+
 		items := m.list.Items()
 		for i, it := range items {
 			mi := it.(mockItem)
@@ -164,7 +167,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if mi.enabled {
 				last := len(mi.trafficBuckets) - 1
-				mi.trafficBuckets[last] += rand.Intn(4) // 0-3 simulated requests this second, per mock
+				mi.trafficBuckets[last] += counts[mi.title]
 			}
 			if roll {
 				mi.trafficBuckets = append(mi.trafficBuckets[1:], 0)
@@ -214,6 +217,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if selected, ok := m.list.SelectedItem().(mockItem); ok {
 					selected.enabled = !selected.enabled
 					cmdSet := m.list.SetItem(m.list.Index(), selected)
+					m.updateServer() // update server registry with modified enabled status
 
 					m.currentMode = togglingMode
 					if selected.enabled {
