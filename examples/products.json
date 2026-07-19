@@ -1,0 +1,42 @@
+[
+  {
+    "id": "prod-001",
+    "name": "Leche Entera 1L",
+    "category": "Lácteos",
+    "price": 1.50,
+    "stock": 120,
+    "unit": "unidad"
+  },
+  {
+    "id": "prod-002",
+    "name": "Pan Lactal Familiar",
+    "category": "Panadería",
+    "price": 2.20,
+    "stock": 45,
+    "unit": "unidad"
+  },
+  {
+    "id": "prod-003",
+    "name": "Manzana Red Delicious",
+    "category": "Frutas y Verduras",
+    "price": 3.00,
+    "stock": 80,
+    "unit": "kg"
+  },
+  {
+    "id": "prod-004",
+    "name": "Fideos Tallarín 500g",
+    "category": "Almacén",
+    "price": 1.10,
+    "stock": 200,
+    "unit": "unidad"
+  },
+  {
+    "id": "prod-005",
+    "name": "Queso Cremoso 1kg",
+    "category": "Lácteos",
+    "price": 8.50,
+    "stock": 15,
+    "unit": "unidad"
+  }
+]

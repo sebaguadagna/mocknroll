@@ -1,12 +1,17 @@
 package tui
 
 import (
+	"encoding/json"
 	"math/rand"
+	"os"
+	"strconv"
+	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
+	"github.com/sebaguadagna/mocknroll/server"
 )
 
 // trafficBucketCount * trafficBucketDuration = total window shown (5 min).
@@ -102,29 +107,33 @@ func seedTrafficBuckets() []int {
 }
 
 func initialModel() model {
-	items := []list.Item{
-		mockItem{
-			title:          "GET /api/v1/users",
-			description:    "Returns users list",
-			status:         "200",
-			delay:          "30",
-			jsonFile:       "examples/users.json",
-			enabled:        true,
-			trafficBuckets: seedTrafficBuckets(),
-		},
-		mockItem{
-			title:          "POST /api/v1/orders",
-			description:    "Creates an order",
-			status:         "201",
-			delay:          "800",
-			jsonFile:       "examples/orders.json",
-			enabled:        true,
-			trafficBuckets: seedTrafficBuckets(),
-		},
+	items, err := loadMocks()
+	if err != nil || len(items) == 0 {
+		items = []list.Item{
+			mockItem{
+				title:          "GET /api/v1/users",
+				description:    "Returns users list",
+				status:         "200",
+				delay:          "30",
+				jsonFile:       "examples/users.json",
+				enabled:        true,
+				trafficBuckets: seedTrafficBuckets(),
+			},
+			mockItem{
+				title:          "POST /api/v1/orders",
+				description:    "Creates an order",
+				status:         "201",
+				delay:          "800",
+				jsonFile:       "examples/orders.json",
+				enabled:        true,
+				trafficBuckets: seedTrafficBuckets(),
+			},
+		}
+		_ = saveMocks(items)
 	}
 
 	l := list.New(items, list.NewDefaultDelegate(), 30, 10) // temporary, visible-enough values
-	l.Title = "Mocks loaded"
+	l.Title = "Mock 'n Roll • Server on http://localhost:8080"
 	l.KeyMap.Quit.SetEnabled(false) // replaced by quitKey: q/esc ask for confirmation
 	l.SetShowHelp(false)            // the list's own help doesn't truncate well at narrow widths (lib bug); we use our own in view.go
 
@@ -140,7 +149,7 @@ func initialModel() model {
 	// derived from m.formStep on every View(), with no animation of its own.
 	pg := progress.New(progress.WithDefaultBlend(), progress.WithWidth(40))
 
-	return model{
+	m := model{
 		list:              l,
 		spinner:           sp,
 		progress:          pg,
@@ -149,6 +158,8 @@ func initialModel() model {
 		currentMode:       listMode,
 		formStep:          0,
 	}
+	m.updateServer()
+	return m
 }
 
 // newProvisionProgress starts (or resets) provisioningMode's animated
@@ -158,4 +169,104 @@ func initialModel() model {
 // the same session.
 func newProvisionProgress() progress.Model {
 	return progress.New(progress.WithDefaultBlend(), progress.WithWidth(44))
+}
+
+type mockItemPersist struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Status      string `json:"status"`
+	Delay       string `json:"delay"`
+	JSONFile    string `json:"json_file"`
+	Enabled     bool   `json:"enabled"`
+}
+
+func (mi mockItem) toPersist() mockItemPersist {
+	return mockItemPersist{
+		Title:       mi.title,
+		Description: mi.description,
+		Status:      mi.status,
+		Delay:       mi.delay,
+		JSONFile:    mi.jsonFile,
+		Enabled:     mi.enabled,
+	}
+}
+
+func (p mockItemPersist) toItem() mockItem {
+	return mockItem{
+		title:          p.Title,
+		description:    p.Description,
+		status:         p.Status,
+		delay:          p.Delay,
+		jsonFile:       p.JSONFile,
+		enabled:        p.Enabled,
+		trafficBuckets: make([]int, trafficBucketCount),
+	}
+}
+
+func saveMocks(items []list.Item) error {
+	var listToSave []mockItemPersist
+	for _, it := range items {
+		mi, ok := it.(mockItem)
+		if ok {
+			listToSave = append(listToSave, mi.toPersist())
+		}
+	}
+	data, err := json.MarshalIndent(listToSave, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile("mocks.json", data, 0644)
+}
+
+func loadMocks() ([]list.Item, error) {
+	data, err := os.ReadFile("mocks.json")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var persisted []mockItemPersist
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		return nil, err
+	}
+
+	var items []list.Item
+	for _, p := range persisted {
+		items = append(items, p.toItem())
+	}
+	return items, nil
+}
+
+func (m model) updateServer() {
+	// Persist mock configurations to mocks.json
+	_ = saveMocks(m.list.Items())
+
+	var mocks []server.Mock
+	for _, it := range m.list.Items() {
+		mi := it.(mockItem)
+		split := strings.SplitN(mi.title, " ", 2)
+		var method, path string
+		if len(split) == 2 {
+			method = split[0]
+			path = split[1]
+		} else {
+			method = "GET"
+			path = mi.title
+		}
+
+		status, _ := strconv.Atoi(mi.status)
+		delay, _ := strconv.Atoi(mi.delay)
+
+		mocks = append(mocks, server.Mock{
+			Method:   method,
+			Path:     path,
+			Status:   status,
+			DelayMs:  delay,
+			JSONFile: mi.jsonFile,
+			Enabled:  mi.enabled,
+		})
+	}
+	server.SetMocks(mocks)
 }

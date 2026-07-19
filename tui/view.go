@@ -209,7 +209,7 @@ func (m model) renderListView() string {
 			selected.status,
 			selected.jsonFile,
 			trafficLine,
-			stepStyle.Render(previewJSON(selected.jsonFile)),
+			stepStyle.Render(previewJSON(selected.jsonFile, max(3, m.listHeight-14))),
 		)
 	} else {
 		detailView = "Select a mock to see details"
@@ -316,7 +316,7 @@ func sumInts(vals []int) int {
 	return total
 }
 
-func previewJSON(path string) string {
+func previewJSON(path string, maxLines int) string {
 	if path == "" {
 		return "(no response file configured)"
 	}
@@ -325,9 +325,9 @@ func previewJSON(path string) string {
 		return fmt.Sprintf("(couldn't read %s)", path)
 	}
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-	truncated := len(lines) > 6
+	truncated := len(lines) > maxLines
 	if truncated {
-		lines = lines[:6]
+		lines = lines[:maxLines]
 	}
 	out := strings.Join(lines, "\n")
 	if truncated {
