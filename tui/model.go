@@ -199,7 +199,7 @@ func (p mockItemPersist) toItem() mockItem {
 		delay:          p.Delay,
 		jsonFile:       p.JSONFile,
 		enabled:        p.Enabled,
-		trafficBuckets: seedTrafficBuckets(),
+		trafficBuckets: make([]int, trafficBucketCount),
 	}
 }
 
