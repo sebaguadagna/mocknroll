@@ -2,7 +2,7 @@ package tui
 
 import (
 	"encoding/json"
-	"math/rand"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -15,8 +15,6 @@ import (
 )
 
 // trafficBucketCount * trafficBucketDuration = total window shown (5 min).
-// TODO: replace with real request counts once server.go actually serves
-// the mocks; for now traffic is simulated to test the visualization.
 const (
 	trafficBucketCount    = 30
 	trafficBucketDuration = 10 // seconds per bucket
@@ -88,6 +86,7 @@ type model struct {
 	formStatus        string
 	formDelay         string
 	formJSONFile      string
+	formError         string   // why the current field was rejected; shown in formMode until the user edits it
 	cursorVisible     bool     // text cursor blink in formMode, toggled by cursorTick (update.go)
 	trafficElapsed    int      // seconds accumulated within the current bucket, shared: all mocks roll buckets at the same time
 	pendingMock       mockItem // mock already built by the wizard, waiting for provisioningMode to finish before it's inserted into the list
@@ -95,20 +94,14 @@ type model struct {
 	toggleLabel       string   // "Enabling..."/"Disabling...", the text togglingMode's popup shows
 }
 
-// seedTrafficBuckets starts the history with simulated data so a mock's
-// sparkline doesn't begin at zero; trafficTick (update.go) rolls it
-// live from there.
-func seedTrafficBuckets() []int {
-	buckets := make([]int, trafficBucketCount)
-	for i := range buckets {
-		buckets[i] = rand.Intn(20)
-	}
-	return buckets
-}
-
-func initialModel() model {
+func initialModel() (model, error) {
 	items, err := loadMocks()
-	if err != nil || len(items) == 0 {
+	if err != nil {
+		// Never fall through to the defaults here: saving them would
+		// overwrite the user's unreadable-but-maybe-recoverable mocks.json.
+		return model{}, fmt.Errorf("can't load mocks.json, fix or remove it: %w", err)
+	}
+	if len(items) == 0 {
 		items = []list.Item{
 			mockItem{
 				title:          "GET /api/v1/users",
@@ -117,7 +110,7 @@ func initialModel() model {
 				delay:          "30",
 				jsonFile:       "examples/users.json",
 				enabled:        true,
-				trafficBuckets: seedTrafficBuckets(),
+				trafficBuckets: make([]int, trafficBucketCount),
 			},
 			mockItem{
 				title:          "POST /api/v1/orders",
@@ -126,7 +119,7 @@ func initialModel() model {
 				delay:          "800",
 				jsonFile:       "examples/orders.json",
 				enabled:        true,
-				trafficBuckets: seedTrafficBuckets(),
+				trafficBuckets: make([]int, trafficBucketCount),
 			},
 		}
 		_ = saveMocks(items)
@@ -159,7 +152,7 @@ func initialModel() model {
 		formStep:          0,
 	}
 	m.updateServer()
-	return m
+	return m, nil
 }
 
 // newProvisionProgress starts (or resets) provisioningMode's animated

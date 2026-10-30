@@ -31,6 +31,7 @@ var (
 	formHeaderStyle    = lipgloss.NewStyle().Bold(true).Foreground(selectedAccent)
 	trafficStyle       = lipgloss.NewStyle().Foreground(selectedAccent)
 	cursorStyle        = lipgloss.NewStyle().Reverse(true) // terminal-style block, same trick as bubbles/textinput
+	formErrorStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	stepStyle          = lipgloss.NewStyle().Faint(true)
 	enabledStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	disabledStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
@@ -111,12 +112,13 @@ func (m model) renderView() string {
 		}
 		percent := float64(m.formStep+1) / float64(totalFormSteps)
 		content := fmt.Sprintf(
-			"%s %s  %s\n\n%s\n\n%s: %s\n\n(Type and press Enter to continue)\n[Esc: cancel]",
+			"%s %s  %s\n\n%s\n\n%s: %s\n%s\n(Type and press Enter to continue)\n[Esc: cancel]",
 			m.spinner.View(),
 			formHeaderStyle.Render("Creating new mock..."),
 			stepStyle.Render(fmt.Sprintf("Step %d/%d", m.formStep+1, totalFormSteps)),
 			m.progress.ViewAs(percent),
 			label, fieldWithCursor(value, m.cursorVisible),
+			formErrorStyle.Render(m.formError),
 		)
 		return borderStyle.Render(content)
 	case provisioningMode:
