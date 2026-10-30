@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -29,7 +30,8 @@ var reg = &registry{
 	requestCounts: make(map[string]int),
 }
 
-// Start runs the mock HTTP server on the specified port.
+// Start binds the port and serves mocks in the background. Binding happens
+// before returning so callers learn about a busy port right away.
 func Start(port int) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleMock)
@@ -39,9 +41,14 @@ func Start(port int) error {
 		Handler: mux,
 	}
 
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return err
+	}
+
 	// Run the HTTP server in a separate background goroutine
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "Mock server error: %v\n", err)
 		}
 	}()
@@ -113,6 +120,12 @@ func handleMock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	// WriteHeader panics outside this range, and mocks.json can be hand-edited.
+	if matchedMock.Status != 0 && (matchedMock.Status < 100 || matchedMock.Status > 999) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"error": "invalid status code in mock: %d"}`, matchedMock.Status)
+		return
+	}
 	if matchedMock.Status > 0 {
 		w.WriteHeader(matchedMock.Status)
 	} else {

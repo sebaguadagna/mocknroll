@@ -20,9 +20,8 @@ const (
 	totalFormSteps
 )
 
-// trafficTickMsg simulates requests arriving at the served mocks, one
-// second at a time. Once server.go serves real traffic, this gets
-// replaced by genuine events instead of a tea.Tick.
+// trafficTickMsg pulls the server's request counts into the mocks'
+// sparklines, one second at a time.
 type trafficTickMsg time.Time
 
 func trafficTick() tea.Cmd {
@@ -47,10 +46,8 @@ func cursorTick() tea.Cmd {
 // as bubbletea's progress-animated example: each tick adds
 // provisionIncrement to an UNclamped accumulator; once it passes 1.0 (one
 // tick after visually reaching 100%, giving the spring time to settle)
-// the screen closes and the pending mock gets inserted.
-// TODO: once server.go actually spins up the mock server, this tick
-// should wait for the server to confirm the reload instead of being a
-// plain timer.
+// the screen closes and the pending mock gets inserted. The wait is purely
+// a visual effect: the server picks up new mocks instantly.
 type provisionTickMsg time.Time
 
 const (
@@ -146,7 +143,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case trafficTickMsg:
-		// Runs in any mode: traffic "arrives at the server" regardless of
+		// Runs in any mode: traffic arrives at the server regardless of
 		// what the user is looking at in the TUI. It's per-mock (each
 		// mocked API has its own history), but they all roll buckets
 		// together, so the 10s cutoff is shared.
@@ -206,6 +203,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.currentMode = confirmExitMode
 				return m, nil
 			case "a":
+				if m.list.FilterState() == list.Filtering {
+					break // let the list write the "a" into the filter
+				}
 				m.currentMode = formMode
 				m.formStep = formStepPath
 				m.cursorVisible = true
@@ -216,8 +216,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if selected, ok := m.list.SelectedItem().(mockItem); ok {
 					selected.enabled = !selected.enabled
-					cmdSet := m.list.SetItem(m.list.Index(), selected)
-					m.updateServer() // update server registry with modified enabled status
+					cmdSet := m.list.SetItem(m.list.GlobalIndex(), selected) // GlobalIndex: Index() points into the filtered view when a filter is active
+					m.updateServer()                                         // update server registry with modified enabled status
 
 					m.currentMode = togglingMode
 					if selected.enabled {
@@ -248,9 +248,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.currentMode = listMode
 				m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
 				m.formStep = formStepPath
+				m.formError = ""
 				return m, nil
 			case tea.KeyEnter:
 				m.cursorVisible = true // reappears right away in the next field, instead of starting mid-blink
+				if err := m.commitFormStep(); err != nil {
+					m.formError = err.Error()
+					return m, nil
+				}
+				m.formError = ""
 				switch m.formStep {
 				case formStepPath:
 					m.formStep = formStepMethod
@@ -263,8 +269,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case formStepJSONFile:
 					// The mock is built but not inserted yet: it's stored in
 					// pendingMock and only added to the list once provisioningMode
-					// finishes (see provisionTickMsg above), simulating the mock
-					// server's reload.
+					// finishes (see provisionTickMsg above).
 					m.pendingMock = mockItem{
 						title:          m.formMethod + " " + m.formPath,
 						description:    "Status: " + m.formStatus + ", Delay: " + m.formDelay + "ms",
@@ -284,6 +289,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case tea.KeyBackspace:
 				m.cursorVisible = true // doesn't stay "off" mid-blink while editing
+				m.formError = ""
 				// Allow deleting a character
 				switch m.formStep {
 				case formStepPath:
@@ -318,6 +324,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break
 				}
 				m.cursorVisible = true // same idea: visible right away when typing, not mid-blink
+				m.formError = ""
 				switch m.formStep {
 				case formStepPath:
 					m.formPath += msg.Text

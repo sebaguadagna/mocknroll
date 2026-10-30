@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `make build` — build binary to `bin/mocknroll`
 - `make run` — `go run .` (launches the TUI directly)
-- `make test` — `go test -v ./...` (unit tests for the mock HTTP server exist in `server/`)
+- `make test` — `go test -v ./...` (unit tests exist in `server/` and `tui/`)
 - `make deps` — `go mod tidy && go mod vendor` (this repo vendors dependencies; run after adding/changing imports)
 - `make fmt` / `make vet` — `go fmt ./...` / `go vet ./...`
 - `make clean` — remove `bin/`
@@ -30,7 +30,7 @@ The `tui` package is split by Elm-architecture role:
 
 State machine (`m.currentMode`, defined in `model.go`):
 - `listMode` — browse the list of configured mocks (left pane) with detail view (right pane, `view.go`). `a` → `formMode`; `q`/`ctrl+c` → `confirmExitMode`.
-- `formMode` — multi-step form to add a new mock, one field per key press cycling through `formStepPath → formStepMethod → formStepStatus → formStepDelay → formStepJSONFile` (constants in `update.go`); `Enter` advances/submits, `Esc` cancels back to `listMode`. On submit, builds a `mockItem` and inserts it into `m.list`.
+- `formMode` — multi-step form to add a new mock, one field per key press cycling through `formStepPath → formStepMethod → formStepStatus → formStepDelay → formStepJSONFile` (constants in `update.go`); `Enter` validates the field (`tui/validate.go`) and advances/submits, `Esc` cancels back to `listMode`. On submit, builds a `mockItem` and inserts it into `m.list`.
 - `confirmExitMode` — `y`/`Y` quits, `n`/`N`/`Esc` returns to `listMode`.
 
 `server/server.go` contains the mock HTTP server that runs in a background goroutine on port `:8080`, serving routes dynamically. It tracks real traffic statistics and maps to the configurations synchronized from the TUI. Mock configurations are persisted locally in `mocks.json` in the root of the project.

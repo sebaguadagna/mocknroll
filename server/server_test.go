@@ -2,6 +2,7 @@ package server
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -132,4 +133,27 @@ func TestMockServer(t *testing.T) {
 			t.Errorf("expected status 404 for non-existent mock, got %d", resp.StatusCode)
 		}
 	})
+}
+
+func TestStartReturnsErrorWhenPortIsBusy(t *testing.T) {
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("failed to reserve a port: %v", err)
+	}
+	defer listener.Close()
+
+	if err := Start(listener.Addr().(*net.TCPAddr).Port); err == nil {
+		t.Error("expected an error for a busy port")
+	}
+}
+
+func TestInvalidStatusDoesNotPanic(t *testing.T) {
+	SetMocks([]Mock{{Method: "GET", Path: "/bad", Status: 99, Enabled: true}})
+
+	w := httptest.NewRecorder()
+	handleMock(w, httptest.NewRequest("GET", "/bad", nil))
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", w.Code)
+	}
 }
