@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
+	"github.com/sebaguadagna/mocknroll/examples"
 	"github.com/sebaguadagna/mocknroll/server"
 )
 
@@ -145,6 +147,7 @@ func initialModel(port int) (model, error) {
 				trafficBuckets: make([]int, trafficBucketCount),
 			},
 		}
+		writeExampleFiles()
 		_ = saveMocks(items)
 	}
 
@@ -238,6 +241,28 @@ func saveMocks(items []list.Item) error {
 		return err
 	}
 	return os.WriteFile("mocks.json", data, 0644)
+}
+
+// writeExampleFiles creates the example mocks' response files in ./examples,
+// keeping any that already exist. Failures are ignored on purpose: the app
+// still starts, and those mocks show the read error instead.
+func writeExampleFiles() {
+	entries, err := examples.Files.ReadDir(".")
+	if err != nil || os.MkdirAll("examples", 0755) != nil {
+		return
+	}
+	for _, entry := range entries {
+		data, err := examples.Files.ReadFile(entry.Name())
+		if err != nil {
+			continue
+		}
+		f, err := os.OpenFile(filepath.Join("examples", entry.Name()), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err != nil {
+			continue
+		}
+		_, _ = f.Write(data)
+		_ = f.Close()
+	}
 }
 
 func loadMocks() ([]list.Item, error) {

@@ -3,7 +3,7 @@
 > Configure mock HTTP endpoints — with realistic response delays — without leaving your terminal.
 
 [![CI](https://github.com/sebaguadagna/mocknroll/actions/workflows/ci.yml/badge.svg)](https://github.com/sebaguadagna/mocknroll/actions/workflows/ci.yml)
-[![Go Reference](https://img.shields.io/badge/go-1.24-00ADD8?logo=go&logoColor=white)](go.mod)
+[![Go Reference](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 `mocknroll` is a terminal UI, built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), for defining mock API endpoints: method, path, status code, response body, and — the whole point of the project — an artificial delay, so you can reproduce how your app behaves against a slow backend before you ever have one.
@@ -55,7 +55,9 @@ Mocks are served over HTTP on port `8080` by default (see `--port` below), respe
 
 ## Installation
 
-There are no tagged releases yet, so build from source:
+Build from source, or run it with Docker if you don't have Go.
+
+### From source
 
 ```sh
 git clone https://github.com/sebaguadagna/mocknroll.git
@@ -63,7 +65,30 @@ cd mocknroll
 make build   # -> bin/mocknroll
 ```
 
-Requires Go 1.24+ (see `go.mod`).
+Requires Go 1.25+ (see `go.mod`).
+
+### With Docker
+
+```sh
+git clone https://github.com/sebaguadagna/mocknroll.git
+cd mocknroll
+docker build -t mocknroll .
+docker run -it --rm -p 8080:8080 mocknroll
+```
+
+The `-it` is required because mocknroll is a terminal UI. Without a mount, your mocks are lost with the container. To keep them, mount a directory at `/data` and run as your own user, so you can write to it and own the files:
+
+```sh
+docker run -it --rm -p 8080:8080 --user "$(id -u):$(id -g)" -v "$PWD:/data" mocknroll
+```
+
+Response file paths are resolved inside the container, so they must be in the mounted directory. Relative paths such as `examples/users.json` work as they do outside Docker.
+
+Arguments go after the image name. The title shows the port inside the container, so publish the same port on the host:
+
+```sh
+docker run -it --rm -p 9000:9000 mocknroll --port 9000
+```
 
 ## Usage
 

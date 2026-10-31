@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make fmt` / `make vet` — `go fmt ./...` / `go vet ./...`
 - `make clean` — remove `bin/`
 
-CI (`.github/workflows/ci.yml`) runs `go build ./...` and `go test ./...` on push/PR to `main`.
+CI (`.github/workflows/ci.yml`) runs `go build ./...` and `go test ./...` on push/PR to `main`, plus a `docker` job that builds the image and requests a mock from a running container.
 
 Note: `package.json` / `package-lock.json` at the repo root are stray/empty and unrelated to this Go module — there is no JS toolchain here.
 
@@ -34,6 +34,6 @@ State machine (`m.currentMode`, defined in `model.go`):
 - `confirmDeleteMode` — `y`/`Y` deletes the selected mock, `n`/`N`/`Esc` returns to `listMode`.
 - `confirmExitMode` — `y`/`Y` quits, `n`/`N`/`Esc` returns to `listMode`.
 
-`server/server.go` contains the mock HTTP server that runs in a background goroutine on the port set by `--port` (8080 by default), serving routes dynamically, including `{name}` path parameters (the mock with the most literal segments wins; captured values are substituted into the JSON body). It tracks real traffic statistics and a bounded log of recent requests (`RecentRequests`, pulled by the TUI's traffic tick), and maps to the configurations synchronized from the TUI. Mock configurations are persisted locally in `mocks.json` in the root of the project.
+`server/server.go` contains the mock HTTP server that runs in a background goroutine on the port set by `--port` (8080 by default), serving routes dynamically, including `{name}` path parameters (the mock with the most literal segments wins; captured values are substituted into the JSON body). It tracks real traffic statistics and a bounded log of recent requests (`RecentRequests`, pulled by the TUI's traffic tick), and maps to the configurations synchronized from the TUI. Mock configurations are persisted in `mocks.json` in the working directory. When that file doesn't exist, `initialModel` creates the example mocks and writes their response files, embedded by the `examples` package, to `./examples/`.
 
 `modelview` (plain text, no extension, in Spanish) is an existing ASCII diagram of the Start()→View() flow — useful as a quick visual reference for the mode-based rendering logic.

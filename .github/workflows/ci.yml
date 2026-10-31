@@ -19,3 +19,26 @@ jobs:
         run: go build ./...
       - name: Test
         run: go test ./...
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        # With this file in the image, the app would start with no mocks and
+        # the request below would answer 404.
+        run: |
+          echo '[]' > mocks.json
+          docker build -t mocknroll .
+      - name: Check the default run
+        run: |
+          docker run -dit --name default -p 8080:8080 mocknroll
+          curl -sS --fail --retry 10 --retry-connrefused --retry-delay 1 http://localhost:8080/api/v1/users
+      - name: Check the image's user and directory
+        run: |
+          test "$(docker inspect -f '{{.Config.User}}' default)" = "65532:65532"
+          test "$(docker inspect -f '{{.Config.WorkingDir}}' default)" = "/data"
+      - name: Check the port argument
+        run: |
+          docker run -dit --name custom -p 9000:9000 mocknroll --port 9000
+          curl -sS --fail --retry 10 --retry-connrefused --retry-delay 1 http://localhost:9000/api/v1/users
