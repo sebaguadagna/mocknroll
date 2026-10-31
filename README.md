@@ -76,7 +76,7 @@ docker build -t mocknroll .
 docker run -it --rm -p 8080:8080 mocknroll
 ```
 
-The `-it` is required because mocknroll is a terminal UI. Without a mount, your mocks are lost with the container. To keep them, mount a directory at `/data` and run as your own user, so you can write to it and own the files:
+The `-it` is required because mocknroll is a terminal UI. Without a mount, your mocks are lost with the container. To keep them, mount a directory at `/data` and run as your own user, so you can write to it and own the files. If mocknroll can't save, the list shows an error in place of its help line:
 
 ```sh
 docker run -it --rm -p 8080:8080 --user "$(id -u):$(id -g)" -v "$PWD:/data" mocknroll
