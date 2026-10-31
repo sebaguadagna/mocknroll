@@ -157,3 +157,22 @@ func TestInvalidStatusDoesNotPanic(t *testing.T) {
 		t.Errorf("expected status 500, got %d", w.Code)
 	}
 }
+
+func TestInFlightRequestKeepsMatchedValues(t *testing.T) {
+	SetMocks([]Mock{{Method: "GET", Path: "/slow", Status: 201, DelayMs: 50, Enabled: true}})
+
+	w := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		handleMock(w, httptest.NewRequest("GET", "/slow", nil))
+		close(done)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+	SetMocks(nil)
+	<-done
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201, got %d", w.Code)
+	}
+}
