@@ -11,7 +11,7 @@ import (
 func newTestModel(t *testing.T) model {
 	t.Helper()
 	t.Chdir(t.TempDir()) // the model persists to ./mocks.json
-	m, err := initialModel()
+	m, err := initialModel(8080)
 	if err != nil {
 		t.Fatalf("initialModel: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestCorruptMocksFileIsReportedAndPreserved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := initialModel(); err == nil {
+	if _, err := initialModel(8080); err == nil {
 		t.Error("expected an error for a corrupt mocks.json")
 	}
 

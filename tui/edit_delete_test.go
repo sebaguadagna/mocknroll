@@ -371,7 +371,7 @@ func TestDeleteAllSurvivesRestart(t *testing.T) {
 	if strings.TrimSpace(string(data)) != "[]" {
 		t.Errorf("expected [], got %q", data)
 	}
-	restarted, err := initialModel()
+	restarted, err := initialModel(8080)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestDefaultsOnlyWithoutMocksFile(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			m, err := initialModel()
+			m, err := initialModel(8080)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -489,7 +489,7 @@ func TestEditAndDeleteDoNothingOnEmptyList(t *testing.T) {
 	if err := os.WriteFile("mocks.json", []byte("[]"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	m, err := initialModel()
+	m, err := initialModel(8080)
 	if err != nil {
 		t.Fatal(err)
 	}

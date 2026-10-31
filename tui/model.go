@@ -117,7 +117,7 @@ type model struct {
 	deleteTitle       string                   // title of that same mock, shown in the popup
 }
 
-func initialModel() (model, error) {
+func initialModel(port int) (model, error) {
 	items, err := loadMocks()
 	if err != nil {
 		// Never fall through to the defaults here: saving them would
@@ -149,7 +149,7 @@ func initialModel() (model, error) {
 	}
 
 	l := list.New(items, list.NewDefaultDelegate(), 30, 10) // temporary, visible-enough values
-	l.Title = "Mock 'n Roll • Server on http://localhost:8080"
+	l.Title = fmt.Sprintf("Mock 'n Roll • Server on http://localhost:%d", port)
 	l.KeyMap.Quit.SetEnabled(false) // replaced by quitKey: q/esc ask for confirmation
 	l.SetShowHelp(false)            // the list's own help doesn't truncate well at narrow widths (lib bug); we use our own in view.go
 

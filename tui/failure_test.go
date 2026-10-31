@@ -172,7 +172,7 @@ func TestOldMocksFileHasNoFailures(t *testing.T) {
 	if err := os.WriteFile("mocks.json", []byte(old), 0644); err != nil {
 		t.Fatal(err)
 	}
-	m, err := initialModel()
+	m, err := initialModel(8080)
 	if err != nil {
 		t.Fatal(err)
 	}
