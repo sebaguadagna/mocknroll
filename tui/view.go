@@ -185,6 +185,11 @@ func (m model) renderListView() string {
 		toggleEnabledKey.Help().Desc, toggleEnabledKey.Help().Key,
 		quitKey.Help().Desc, quitKey.Help().Key,
 	))
+	// A failed save takes the help line's place: below the list it's visible
+	// in every mode that shows this view, and it costs no extra layout rows.
+	if m.saveError != "" {
+		hintLine = formErrorStyle.Render("Changes will be lost on exit, can't save: " + m.saveError)
+	}
 	listBody := m.list.View() + "\n\n" + hintLine
 	leftContent := panelPadding.
 		Width(m.listWidth).MaxWidth(m.listWidth).

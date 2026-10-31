@@ -117,6 +117,7 @@ type model struct {
 	editIndex         int                      // index in the unfiltered list of the mock being edited
 	deleteIndex       int                      // index in the unfiltered list of the mock confirmDeleteMode's popup asks about
 	deleteTitle       string                   // title of that same mock, shown in the popup
+	saveError         string                   // why the last write to mocks.json failed; empty once a write succeeds
 }
 
 func initialModel(port int) (model, error) {
@@ -339,9 +340,12 @@ func (mi mockItem) toServerMock() server.Mock {
 	}
 }
 
-func (m model) updateServer() {
+func (m *model) updateServer() {
 	// Persist mock configurations to mocks.json
-	_ = saveMocks(m.list.Items())
+	m.saveError = ""
+	if err := saveMocks(m.list.Items()); err != nil {
+		m.saveError = err.Error()
+	}
 
 	var mocks []server.Mock
 	for _, it := range m.list.Items() {
