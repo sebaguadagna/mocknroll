@@ -63,6 +63,8 @@ type mockItem struct {
 	description    string
 	status         string
 	delay          string
+	failureRate    string
+	failureStatus  string
 	jsonFile       string
 	enabled        bool
 	trafficBuckets []int // requests per trafficBucketDuration-second bucket, one per mock; the last one is the "in progress" bucket
@@ -98,6 +100,8 @@ type model struct {
 	formMethod        string
 	formStatus        string
 	formDelay         string
+	formFailureRate   string
+	formFailureStatus string
 	formJSONFile      string
 	formError         string                   // why the current field was rejected; shown in formMode until the user edits it
 	cursorVisible     bool                     // text cursor blink in formMode, toggled by cursorTick (update.go)
@@ -184,22 +188,26 @@ func newProvisionProgress() progress.Model {
 }
 
 type mockItemPersist struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
-	Delay       string `json:"delay"`
-	JSONFile    string `json:"json_file"`
-	Enabled     bool   `json:"enabled"`
+	Title         string `json:"title"`
+	Description   string `json:"description"`
+	Status        string `json:"status"`
+	Delay         string `json:"delay"`
+	FailureRate   string `json:"failure_rate,omitempty"`
+	FailureStatus string `json:"failure_status,omitempty"`
+	JSONFile      string `json:"json_file"`
+	Enabled       bool   `json:"enabled"`
 }
 
 func (mi mockItem) toPersist() mockItemPersist {
 	return mockItemPersist{
-		Title:       mi.title,
-		Description: mi.description,
-		Status:      mi.status,
-		Delay:       mi.delay,
-		JSONFile:    mi.jsonFile,
-		Enabled:     mi.enabled,
+		Title:         mi.title,
+		Description:   mi.description,
+		Status:        mi.status,
+		Delay:         mi.delay,
+		FailureRate:   mi.failureRate,
+		FailureStatus: mi.failureStatus,
+		JSONFile:      mi.jsonFile,
+		Enabled:       mi.enabled,
 	}
 }
 
@@ -209,6 +217,8 @@ func (p mockItemPersist) toItem() mockItem {
 		description:    p.Description,
 		status:         p.Status,
 		delay:          p.Delay,
+		failureRate:    p.FailureRate,
+		failureStatus:  p.FailureStatus,
 		jsonFile:       p.JSONFile,
 		enabled:        p.Enabled,
 		trafficBuckets: make([]int, trafficBucketCount),
@@ -265,26 +275,52 @@ func autoDescription(status, delay string) string {
 	return "Status: " + status + ", Delay: " + delay + "ms"
 }
 
+// parseDelayRange returns the limits of a "200" or "100-500" delay. An invalid
+// value, only possible in a hand-edited mocks.json, counts as no delay.
+func parseDelayRange(delay string) (minMs, maxMs int) {
+	minText, maxText, isRange := strings.Cut(delay, "-")
+	minMs, err := strconv.Atoi(minText)
+	if err != nil || minMs < 0 {
+		return 0, 0
+	}
+	if !isRange {
+		return minMs, minMs
+	}
+	maxMs, err = strconv.Atoi(maxText)
+	if err != nil || maxMs < minMs {
+		return 0, 0
+	}
+	return minMs, maxMs
+}
+
+// toServerMock leaves invalid numbers from a hand-edited mocks.json at 0.
+func (mi mockItem) toServerMock() server.Mock {
+	method, path := splitTitle(mi.title)
+	status, _ := strconv.Atoi(mi.status)
+	minDelay, maxDelay := parseDelayRange(mi.delay)
+	failureRate, _ := strconv.Atoi(mi.failureRate)
+	failureStatus, _ := strconv.Atoi(mi.failureStatus)
+
+	return server.Mock{
+		Method:        method,
+		Path:          path,
+		Status:        status,
+		DelayMs:       minDelay,
+		DelayMaxMs:    maxDelay,
+		JSONFile:      mi.jsonFile,
+		Enabled:       mi.enabled,
+		FailureRate:   failureRate,
+		FailureStatus: failureStatus,
+	}
+}
+
 func (m model) updateServer() {
 	// Persist mock configurations to mocks.json
 	_ = saveMocks(m.list.Items())
 
 	var mocks []server.Mock
 	for _, it := range m.list.Items() {
-		mi := it.(mockItem)
-		method, path := splitTitle(mi.title)
-
-		status, _ := strconv.Atoi(mi.status)
-		delay, _ := strconv.Atoi(mi.delay)
-
-		mocks = append(mocks, server.Mock{
-			Method:   method,
-			Path:     path,
-			Status:   status,
-			DelayMs:  delay,
-			JSONFile: mi.jsonFile,
-			Enabled:  mi.enabled,
-		})
+		mocks = append(mocks, it.(mockItem).toServerMock())
 	}
 	server.SetMocks(mocks)
 }

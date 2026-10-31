@@ -16,6 +16,8 @@ const (
 	formStepMethod
 	formStepStatus
 	formStepDelay
+	formStepFailureRate
+	formStepFailureStatus
 	formStepJSONFile
 	totalFormSteps
 )
@@ -245,6 +247,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.formMethod, m.formPath = splitTitle(selected.title)
 					m.formStatus = selected.status
 					m.formDelay = selected.delay
+					m.formFailureRate = selected.failureRate
+					m.formFailureStatus = selected.failureStatus
 					m.formJSONFile = selected.jsonFile
 					m.currentMode = formMode
 					m.formStep = formStepPath
@@ -328,6 +332,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case formStepStatus:
 					m.formStep = formStepDelay
 				case formStepDelay:
+					m.formStep = formStepFailureRate
+				case formStepFailureRate:
+					m.formStep = formStepFailureStatus
+					if m.formFailureRate == "0" {
+						m.formFailureStatus = ""
+						m.formStep = formStepJSONFile
+					}
+				case formStepFailureStatus:
 					m.formStep = formStepJSONFile
 				case formStepJSONFile:
 					// The mock is built but not inserted yet: it's stored in
@@ -338,6 +350,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						description:    autoDescription(m.formStatus, m.formDelay),
 						status:         m.formStatus,
 						delay:          m.formDelay,
+						failureRate:    m.formFailureRate,
+						failureStatus:  m.formFailureStatus,
 						jsonFile:       m.formJSONFile,
 						enabled:        true,
 						trafficBuckets: make([]int, trafficBucketCount), // freshly created mock: no traffic yet
@@ -378,6 +392,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if len(m.formDelay) > 0 {
 						m.formDelay = m.formDelay[:len(m.formDelay)-1]
 					}
+				case formStepFailureRate:
+					if len(m.formFailureRate) > 0 {
+						m.formFailureRate = m.formFailureRate[:len(m.formFailureRate)-1]
+					}
+				case formStepFailureStatus:
+					if len(m.formFailureStatus) > 0 {
+						m.formFailureStatus = m.formFailureStatus[:len(m.formFailureStatus)-1]
+					}
 				case formStepJSONFile:
 					if len(m.formJSONFile) > 0 {
 						m.formJSONFile = m.formJSONFile[:len(m.formJSONFile)-1]
@@ -404,6 +426,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.formStatus += msg.Text
 				case formStepDelay:
 					m.formDelay += msg.Text
+				case formStepFailureRate:
+					m.formFailureRate += msg.Text
+				case formStepFailureStatus:
+					m.formFailureStatus += msg.Text
 				case formStepJSONFile:
 					m.formJSONFile += msg.Text
 				}
@@ -420,6 +446,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) resetForm() {
 	m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
+	m.formFailureRate, m.formFailureStatus = "", ""
 	m.formStep = formStepPath
 	m.formError = ""
 }

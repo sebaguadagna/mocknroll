@@ -49,16 +49,57 @@ func normalizeStatus(status string) (string, error) {
 	return strconv.Itoa(code), nil
 }
 
+// normalizeDelay accepts a fixed value ("200") or a range ("100-500").
 func normalizeDelay(delay string) (string, error) {
 	delay = strings.TrimSpace(delay)
 	if delay == "" {
 		return "0", nil
 	}
-	ms, err := strconv.Atoi(delay)
-	if err != nil || ms < 0 {
-		return "", errors.New("delay must be 0 or more milliseconds")
+	errInvalid := errors.New("delay must be milliseconds, like 200, or a range, like 100-500")
+
+	minText, maxText, isRange := strings.Cut(delay, "-")
+	minMs, err := strconv.Atoi(strings.TrimSpace(minText))
+	if err != nil || minMs < 0 {
+		return "", errInvalid
 	}
-	return strconv.Itoa(ms), nil
+	if !isRange {
+		return strconv.Itoa(minMs), nil
+	}
+	maxMs, err := strconv.Atoi(strings.TrimSpace(maxText))
+	if err != nil {
+		return "", errInvalid
+	}
+	if minMs > maxMs {
+		return "", errors.New("delay range must go from lowest to highest")
+	}
+	if minMs == maxMs {
+		return strconv.Itoa(minMs), nil
+	}
+	return strconv.Itoa(minMs) + "-" + strconv.Itoa(maxMs), nil
+}
+
+func normalizeFailureRate(rate string) (string, error) {
+	rate = strings.TrimSpace(rate)
+	if rate == "" {
+		return "0", nil
+	}
+	percent, err := strconv.Atoi(rate)
+	if err != nil || percent < 0 || percent > 100 {
+		return "", errors.New("failure rate must be a number between 0 and 100")
+	}
+	return strconv.Itoa(percent), nil
+}
+
+func normalizeFailureStatus(status string) (string, error) {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return "500", nil
+	}
+	code, err := strconv.Atoi(status)
+	if err != nil || code < 400 || code > 599 {
+		return "", errors.New("failure status must be a number between 400 and 599")
+	}
+	return strconv.Itoa(code), nil
 }
 
 // normalizeJSONFile accepts an empty value: the server answers "{}" then.
@@ -94,6 +135,10 @@ func (m *model) commitFormStep() error {
 		m.formStatus, err = keepOnError(m.formStatus, normalizeStatus)
 	case formStepDelay:
 		m.formDelay, err = keepOnError(m.formDelay, normalizeDelay)
+	case formStepFailureRate:
+		m.formFailureRate, err = keepOnError(m.formFailureRate, normalizeFailureRate)
+	case formStepFailureStatus:
+		m.formFailureStatus, err = keepOnError(m.formFailureStatus, normalizeFailureStatus)
 	case formStepJSONFile:
 		m.formJSONFile, err = keepOnError(m.formJSONFile, normalizeJSONFile)
 	}

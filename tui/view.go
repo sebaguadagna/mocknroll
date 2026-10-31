@@ -109,8 +109,14 @@ func (m model) renderView() string {
 			label = "Status"
 			value = m.formStatus
 		case formStepDelay:
-			label = "Delay (ms)"
+			label = "Delay (ms, or a range like 100-500)"
 			value = m.formDelay
+		case formStepFailureRate:
+			label = "Failure rate (%)"
+			value = m.formFailureRate
+		case formStepFailureStatus:
+			label = "Failure status"
+			value = m.formFailureStatus
 		case formStepJSONFile:
 			label = "JSON File"
 			value = m.formJSONFile
@@ -228,7 +234,7 @@ func (m model) renderListView() string {
 		)
 
 		detailView = fmt.Sprintf(
-			"%s\n\n%s %s\n%s\n\n%s   %s\nStatus:     %s\nJSON File:  %s\n\n%s\n\nResponse preview:\n%s",
+			"%s\n\n%s %s\n%s\n\n%s   %s\nStatus:     %s\n%sJSON File:  %s\n\n%s\n\nResponse preview:\n%s",
 			headerStyle.Render("Details"),
 			coloredMethod,
 			path,
@@ -236,6 +242,7 @@ func (m model) renderListView() string {
 			statusBadge,
 			delayText(selected.delay),
 			selected.status,
+			failureLine(selected),
 			selected.jsonFile,
 			trafficLine,
 			stepStyle.Render(previewJSON(selected.jsonFile, max(3, m.listHeight-14))),
@@ -282,12 +289,17 @@ func requestLogRow(entry server.RequestLogEntry, width int) string {
 		lastColumn = fmt.Sprintf("%dms", entry.Duration.Milliseconds())
 	}
 
-	suffixWidth := 1 + lipgloss.Width(status) + 1 + lastColumnWidth
+	failSuffix := ""
+	if entry.Simulated {
+		failSuffix = " fail"
+	}
+
+	suffixWidth := 1 + lipgloss.Width(status) + 1 + lastColumnWidth + lipgloss.Width(failSuffix)
 	pathWidth := max(8, width-lipgloss.Width(prefix)-suffixWidth)
 	path := fitText(sanitizeForTerminal(entry.Path), pathWidth)
 	path += strings.Repeat(" ", pathWidth-lipgloss.Width(path))
 
-	row := fmt.Sprintf("%s%s %s %*s", prefix, path, statusStyle(entry.Status).Render(status), lastColumnWidth, lastColumn)
+	row := fmt.Sprintf("%s%s %s %*s%s", prefix, path, statusStyle(entry.Status).Render(status), lastColumnWidth, lastColumn, failSuffix)
 	return lipgloss.NewStyle().MaxWidth(width).Render(row)
 }
 
@@ -348,8 +360,21 @@ func (m model) formMethodIfEmpty(item mockItem) string {
 	return ""
 }
 
+// failureLine is empty for mocks that never fail, so they show nothing extra.
+func failureLine(item mockItem) string {
+	rate, _ := strconv.Atoi(item.failureRate)
+	if rate <= 0 {
+		return ""
+	}
+	status := item.failureStatus
+	if status == "" {
+		status = "500"
+	}
+	return fmt.Sprintf("Failures:   %d%% with %s\n", rate, status)
+}
+
 func delayText(delay string) string {
-	ms, _ := strconv.Atoi(delay) // non-numeric or empty value -> 0 (green)
+	_, ms := parseDelayRange(delay) // non-numeric or empty value -> 0 (green)
 
 	style := delayLowStyle
 	switch {

@@ -42,6 +42,7 @@
 - **Add a mock** through a guided, step-by-step form (path → method → status → delay → response file) that validates each field as you go.
 - **Edit or delete a mock** without touching `mocks.json` by hand.
 - **Live request log** (`r`) — method, path, status, and duration of recent requests, including those no mock matched.
+- **Simulate an unreliable backend** — random latency within a range and a per-mock failure rate.
 - **Toggle a mock on/off** (`t`) without deleting it.
 - **Delay severity at a glance** — the configured delay is color-coded: green (≤ 30ms), orange (31–150ms), red (> 150ms).
 - **Response preview** — see the first lines of the JSON file a mock will respond with, right in the detail panel.
@@ -82,6 +83,12 @@ make run
 | `?`         | Toggle full keybinding help          |
 
 While filling out the add or edit form: `Enter` advances to the next field (or saves on the last one), `Esc` cancels and discards the form.
+
+### Simulating an unreliable backend
+
+The form's delay field takes a fixed value (`200`) or a range (`100-500`); with a range, each request waits a random time within it.
+
+The failure rate is the percentage of requests that fail, decided independently for each one. A failing request still waits the configured delay, then answers the failure status (400–599, `500` by default) with `{"error": "simulated failure"}`. Those requests are marked `fail` in the request log. A rate of `0` turns this off.
 
 ## Development
 
