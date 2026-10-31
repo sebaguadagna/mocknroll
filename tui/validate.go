@@ -110,8 +110,12 @@ func keepOnError(value string, normalize func(string) (string, error)) (string, 
 	return normalized, nil
 }
 
+// hasMock ignores the mock being edited, so it can keep its own route.
 func (m model) hasMock(title string) bool {
-	for _, it := range m.list.Items() {
+	for i, it := range m.list.Items() {
+		if m.editing && i == m.editIndex {
+			continue
+		}
 		if mi, ok := it.(mockItem); ok && mi.title == title {
 			return true
 		}

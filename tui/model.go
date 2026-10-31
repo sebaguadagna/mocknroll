@@ -33,16 +33,25 @@ var (
 		key.WithKeys("t"),
 		key.WithHelp("t", "toggle enabled"),
 	)
+	editMockKey = key.NewBinding(
+		key.WithKeys("e"),
+		key.WithHelp("e", "edit"),
+	)
+	deleteMockKey = key.NewBinding(
+		key.WithKeys("d"),
+		key.WithHelp("d", "delete"),
+	)
 )
 
 type mode int
 
 const (
-	listMode         mode = iota //0
-	formMode                     //1
-	confirmExitMode              // mode for confirming exit
-	provisioningMode             // "configuring mock" screen after closing the wizard, before returning to listMode
-	togglingMode                 // popup overlaid on listMode while "t" enables/disables a mock
+	listMode          mode = iota //0
+	formMode                      //1
+	confirmExitMode               // mode for confirming exit
+	confirmDeleteMode             // mode for confirming the deletion of a mock
+	provisioningMode              // "configuring mock" screen after closing the wizard, before returning to listMode
+	togglingMode                  // popup overlaid on listMode while "t" enables/disables a mock
 )
 
 type mockItem struct {
@@ -92,6 +101,10 @@ type model struct {
 	pendingMock       mockItem // mock already built by the wizard, waiting for provisioningMode to finish before it's inserted into the list
 	provisionPercent  float64  // UNclamped accumulator (unlike progress.Model.Percent()) so we can detect the overshoot that closes the animation
 	toggleLabel       string   // "Enabling..."/"Disabling...", the text togglingMode's popup shows
+	editing           bool     // the form (and the provisioning that follows it) is changing the mock at editIndex instead of adding one
+	editIndex         int      // index in the unfiltered list of the mock being edited
+	deleteIndex       int      // index in the unfiltered list of the mock confirmDeleteMode's popup asks about
+	deleteTitle       string   // title of that same mock, shown in the popup
 }
 
 func initialModel() (model, error) {
@@ -101,7 +114,7 @@ func initialModel() (model, error) {
 		// overwrite the user's unreadable-but-maybe-recoverable mocks.json.
 		return model{}, fmt.Errorf("can't load mocks.json, fix or remove it: %w", err)
 	}
-	if len(items) == 0 {
+	if items == nil { // no mocks.json yet; an existing empty one means the user deleted them all
 		items = []list.Item{
 			mockItem{
 				title:          "GET /api/v1/users",
@@ -197,7 +210,7 @@ func (p mockItemPersist) toItem() mockItem {
 }
 
 func saveMocks(items []list.Item) error {
-	var listToSave []mockItemPersist
+	listToSave := []mockItemPersist{} // not nil: an empty list must be saved as [], not null
 	for _, it := range items {
 		mi, ok := it.(mockItem)
 		if ok {
@@ -225,11 +238,25 @@ func loadMocks() ([]list.Item, error) {
 		return nil, err
 	}
 
-	var items []list.Item
+	items := []list.Item{}
 	for _, p := range persisted {
 		items = append(items, p.toItem())
 	}
 	return items, nil
+}
+
+// splitTitle returns the method and path of a "METHOD /path" title. A title
+// with no method, only possible in a hand-edited mocks.json, counts as GET.
+func splitTitle(title string) (method, path string) {
+	split := strings.SplitN(title, " ", 2)
+	if len(split) == 2 {
+		return split[0], split[1]
+	}
+	return "GET", title
+}
+
+func autoDescription(status, delay string) string {
+	return "Status: " + status + ", Delay: " + delay + "ms"
 }
 
 func (m model) updateServer() {
@@ -239,15 +266,7 @@ func (m model) updateServer() {
 	var mocks []server.Mock
 	for _, it := range m.list.Items() {
 		mi := it.(mockItem)
-		split := strings.SplitN(mi.title, " ", 2)
-		var method, path string
-		if len(split) == 2 {
-			method = split[0]
-			path = split[1]
-		} else {
-			method = "GET"
-			path = mi.title
-		}
+		method, path := splitTitle(mi.title)
 
 		status, _ := strconv.Atoi(mi.status)
 		delay, _ := strconv.Atoi(mi.delay)

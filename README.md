@@ -40,6 +40,7 @@
 
 - **Browse and filter** your configured mocks in a searchable list.
 - **Add a mock** through a guided, step-by-step form (path → method → status → delay → response file) that validates each field as you go.
+- **Edit or delete a mock** without touching `mocks.json` by hand.
 - **Toggle a mock on/off** (`t`) without deleting it.
 - **Delay severity at a glance** — the configured delay is color-coded: green (≤ 30ms), orange (31–150ms), red (> 150ms).
 - **Response preview** — see the first lines of the JSON file a mock will respond with, right in the detail panel.
@@ -47,7 +48,7 @@
 
 ## Status
 
-Mocks are served over HTTP on port `8080`, respecting the configured status, delay, and response body, and persisted to `mocks.json` in the working directory. Editing and deleting mocks from the TUI is the next milestone.
+Mocks are served over HTTP on port `8080`, respecting the configured status, delay, and response body, and persisted to `mocks.json` in the working directory.
 
 ## Installation
 
@@ -72,11 +73,13 @@ make run
 | `↑/k` `↓/j` | Move through the mock list           |
 | `/`         | Filter mocks                         |
 | `a`         | Add a new mock                       |
+| `e`         | Edit the selected mock               |
+| `d`         | Delete the selected mock (asks for confirmation) |
 | `t`         | Toggle the selected mock enabled/disabled |
 | `q` / `Esc` | Quit (asks for confirmation)         |
 | `?`         | Toggle full keybinding help          |
 
-While filling out the "add mock" form: `Enter` advances to the next field (or saves on the last one), `Esc` cancels and discards the form.
+While filling out the add or edit form: `Enter` advances to the next field (or saves on the last one), `Esc` cancels and discards the form.
 
 ## Development
 

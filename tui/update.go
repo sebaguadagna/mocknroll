@@ -115,6 +115,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cursorVisible = !m.cursorVisible
 		return m, cursorTick()
 
+	case list.FilterMatchesMsg:
+		// Handled in any mode: trafficTick refreshes the filter every second,
+		// and dropping the result would leave the filtered view empty.
+		m.list, cmd = m.list.Update(msg)
+		return m, cmd
+
 	case provisionTickMsg:
 		if m.currentMode != provisioningMode {
 			// let the tick chain die, same as with the spinner/cursor.
@@ -124,7 +130,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.provisionPercent > 1.0 {
 			// The bar has already arrived (and had a margin tick to settle
 			// visually): close the screen and insert the mock.
-			cmd = m.list.InsertItem(len(m.list.Items()), m.pendingMock)
+			if m.editing {
+				// Taken now, not on submit, so traffic received during the
+				// animation isn't lost. A new route starts from the zeroed
+				// buckets already in pendingMock.
+				current := m.list.Items()[m.editIndex].(mockItem)
+				if current.title == m.pendingMock.title {
+					m.pendingMock.trafficBuckets = current.trafficBuckets
+				}
+				cmd = m.list.SetItem(m.editIndex, m.pendingMock)
+				m.editing = false
+			} else {
+				cmd = m.list.InsertItem(len(m.list.Items()), m.pendingMock)
+			}
 			m.updateServer() // update server registry with newly provisioned mock
 			m.pendingMock = mockItem{}
 			m.provisionPercent = 0
@@ -210,6 +228,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.formStep = formStepPath
 				m.cursorVisible = true
 				return m, tea.Batch(m.spinner.Tick, cursorTick())
+			case "e":
+				if m.list.FilterState() == list.Filtering {
+					break // let the list write the "e" into the filter
+				}
+				if selected, ok := m.list.SelectedItem().(mockItem); ok {
+					m.editing = true
+					m.editIndex = m.list.GlobalIndex()
+					m.formMethod, m.formPath = splitTitle(selected.title)
+					m.formStatus = selected.status
+					m.formDelay = selected.delay
+					m.formJSONFile = selected.jsonFile
+					m.currentMode = formMode
+					m.formStep = formStepPath
+					m.cursorVisible = true
+					return m, tea.Batch(m.spinner.Tick, cursorTick())
+				}
+			case "d":
+				if m.list.FilterState() == list.Filtering {
+					break // let the list write the "d" into the filter
+				}
+				if selected, ok := m.list.SelectedItem().(mockItem); ok {
+					m.deleteIndex = m.list.GlobalIndex()
+					m.deleteTitle = selected.title
+					m.currentMode = confirmDeleteMode
+				}
+				return m, nil // never reaches the list, which binds "d" to next page
 			case "t":
 				if m.list.FilterState() == list.Filtering {
 					break // let the list write the "t" into the filter
@@ -229,6 +273,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		// CONFIRM DELETE MODE
+		case confirmDeleteMode:
+			switch msg.String() {
+			case "y", "Y":
+				m.deleteConfirmedMock()
+				m.updateServer() // stop serving the deleted mock
+				m.currentMode = listMode
+				return m, nil
+			case "n", "N", "esc":
+				m.currentMode = listMode
+				return m, nil
+			}
+
 		// CONFIRM EXIT MODE
 		case confirmExitMode:
 			switch msg.String() {
@@ -246,9 +303,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.Code {
 			case tea.KeyEsc:
 				m.currentMode = listMode
-				m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
-				m.formStep = formStepPath
-				m.formError = ""
+				m.editing = false
+				m.resetForm()
 				return m, nil
 			case tea.KeyEnter:
 				m.cursorVisible = true // reappears right away in the next field, instead of starting mid-blink
@@ -272,7 +328,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// finishes (see provisionTickMsg above).
 					m.pendingMock = mockItem{
 						title:          m.formMethod + " " + m.formPath,
-						description:    "Status: " + m.formStatus + ", Delay: " + m.formDelay + "ms",
+						description:    autoDescription(m.formStatus, m.formDelay),
 						status:         m.formStatus,
 						delay:          m.formDelay,
 						jsonFile:       m.formJSONFile,
@@ -280,11 +336,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						trafficBuckets: make([]int, trafficBucketCount), // freshly created mock: no traffic yet
 					}
 
+					if m.editing {
+						old := m.list.Items()[m.editIndex].(mockItem)
+						m.pendingMock.enabled = old.enabled
+						if old.description != autoDescription(old.status, old.delay) {
+							m.pendingMock.description = old.description
+						}
+					}
+
 					m.currentMode = provisioningMode
 					m.provisionPercent = 0
 					m.provisionProgress = newProvisionProgress()
-					m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
-					m.formStep = formStepPath
+					m.resetForm()
 					return m, provisionTick()
 				}
 			case tea.KeyBackspace:
@@ -346,4 +409,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m *model) resetForm() {
+	m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
+	m.formStep = formStepPath
+	m.formError = ""
+}
+
+// deleteConfirmedMock removes the mock at deleteIndex and keeps the selection
+// valid. An applied filter is re-run afterwards because list.RemoveItem trims
+// its matches by the unfiltered index, which can drop the wrong row.
+func (m *model) deleteConfirmedMock() {
+	cursor := m.list.Index()
+	filterApplied := m.list.FilterState() == list.FilterApplied
+	filterText := m.list.FilterInput.Value()
+
+	m.list.RemoveItem(m.deleteIndex)
+
+	if filterApplied {
+		m.list.SetFilterText(filterText)
+		if len(m.list.VisibleItems()) == 0 {
+			m.list.ResetFilter() // it was the only match
+		}
+	}
+	m.list.Select(max(0, min(cursor, len(m.list.VisibleItems())-1)))
 }

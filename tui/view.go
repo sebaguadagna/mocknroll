@@ -89,6 +89,9 @@ func (m model) renderView() string {
 		// the whole block.
 		popup := exitPopupStyle.Render("Quit mocknroll?\n\nAre you sure you want to quit? (y/n)")
 		return overlayCenter(m.renderListView(), popup, m.listWidth+2)
+	case confirmDeleteMode:
+		popup := exitPopupStyle.Render(fmt.Sprintf("Delete %s?\n\nThis can't be undone. (y/n)", m.deleteTitle))
+		return overlayCenter(m.renderListView(), popup, m.listWidth+2)
 	case formMode:
 		// Form mode
 		label := ""
@@ -110,11 +113,15 @@ func (m model) renderView() string {
 			label = "JSON File"
 			value = m.formJSONFile
 		}
+		header := "Creating new mock..."
+		if m.editing {
+			header = "Editing mock..."
+		}
 		percent := float64(m.formStep+1) / float64(totalFormSteps)
 		content := fmt.Sprintf(
 			"%s %s  %s\n\n%s\n\n%s: %s\n%s\n(Type and press Enter to continue)\n[Esc: cancel]",
 			m.spinner.View(),
-			formHeaderStyle.Render("Creating new mock..."),
+			formHeaderStyle.Render(header),
 			stepStyle.Render(fmt.Sprintf("Step %d/%d", m.formStep+1, totalFormSteps)),
 			m.progress.ViewAs(percent),
 			label, fieldWithCursor(value, m.cursorVisible),
@@ -122,9 +129,13 @@ func (m model) renderView() string {
 		)
 		return borderStyle.Render(content)
 	case provisioningMode:
+		header := "Configuring new mock..."
+		if m.editing {
+			header = "Updating mock..."
+		}
 		content := fmt.Sprintf(
 			"%s\n\n%s\n\n%s",
-			formHeaderStyle.Render("Configuring new mock..."),
+			formHeaderStyle.Render(header),
 			stepStyle.Render("Reloading the mock server so it can serve "+m.pendingMock.title),
 			m.provisionProgress.View(),
 		)
@@ -158,8 +169,10 @@ func (m model) renderListView() string {
 	// shadeTextStyle: same hue as the "Details"/"Mocks loaded" shading,
 	// but as text color, without the background pill.
 	hintLine := shadeTextStyle.Render(fmt.Sprintf(
-		"%s: %s • filter: / • %s: %s • %s: %s",
+		"%s: %s • %s: %s • %s: %s • filter: / • %s: %s • %s: %s",
 		addMockKey.Help().Desc, addMockKey.Help().Key,
+		editMockKey.Help().Desc, editMockKey.Help().Key,
+		deleteMockKey.Help().Desc, deleteMockKey.Help().Key,
 		toggleEnabledKey.Help().Desc, toggleEnabledKey.Help().Key,
 		quitKey.Help().Desc, quitKey.Help().Key,
 	))
