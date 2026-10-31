@@ -29,11 +29,11 @@ The `tui` package is split by Elm-architecture role:
 - `view.go` — `View()`, rendering per mode.
 
 State machine (`m.currentMode`, defined in `model.go`):
-- `listMode` — browse the list of configured mocks (left pane) with detail view (right pane, `view.go`). `a`/`e` → `formMode`; `d` → `confirmDeleteMode`; `q`/`ctrl+c` → `confirmExitMode`.
+- `listMode` — browse the list of configured mocks (left pane) with detail view (right pane, `view.go`). `a`/`e` → `formMode`; `d` → `confirmDeleteMode`; `r` switches the right pane between details and the request log; `q`/`ctrl+c` → `confirmExitMode`.
 - `formMode` — multi-step form to add a new mock, one field per key press cycling through `formStepPath → formStepMethod → formStepStatus → formStepDelay → formStepJSONFile` (constants in `update.go`); `Enter` validates the field (`tui/validate.go`) and advances/submits, `Esc` cancels back to `listMode`. On submit, builds a `mockItem` and, after the provisioning animation, inserts it into `m.list` or replaces the mock at `m.editIndex` when `m.editing`.
 - `confirmDeleteMode` — `y`/`Y` deletes the selected mock, `n`/`N`/`Esc` returns to `listMode`.
 - `confirmExitMode` — `y`/`Y` quits, `n`/`N`/`Esc` returns to `listMode`.
 
-`server/server.go` contains the mock HTTP server that runs in a background goroutine on port `:8080`, serving routes dynamically. It tracks real traffic statistics and maps to the configurations synchronized from the TUI. Mock configurations are persisted locally in `mocks.json` in the root of the project.
+`server/server.go` contains the mock HTTP server that runs in a background goroutine on port `:8080`, serving routes dynamically. It tracks real traffic statistics and a bounded log of recent requests (`RecentRequests`, pulled by the TUI's traffic tick), and maps to the configurations synchronized from the TUI. Mock configurations are persisted locally in `mocks.json` in the root of the project.
 
 `modelview` (plain text, no extension, in Spanish) is an existing ASCII diagram of the Start()→View() flow — useful as a quick visual reference for the mode-based rendering logic.

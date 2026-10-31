@@ -20,10 +20,24 @@ type Mock struct {
 	Enabled  bool
 }
 
+// RequestLogEntry describes one completed request.
+type RequestLogEntry struct {
+	Time     time.Time
+	Method   string
+	Path     string
+	Status   int
+	Duration time.Duration
+	Matched  bool // false when no enabled mock matched
+}
+
+// requestLogSize bounds the memory the log can use under any request volume.
+const requestLogSize = 200
+
 type registry struct {
 	mu            sync.RWMutex
 	mocks         []Mock
 	requestCounts map[string]int
+	requestLog    []RequestLogEntry // oldest first
 }
 
 var reg = &registry{
@@ -76,7 +90,56 @@ func GetAndResetRequestCounts() map[string]int {
 	return counts
 }
 
+// RecentRequests returns a copy of the logged requests, newest first.
+func RecentRequests() []RequestLogEntry {
+	reg.mu.RLock()
+	defer reg.mu.RUnlock()
+
+	entries := make([]RequestLogEntry, len(reg.requestLog))
+	for i, entry := range reg.requestLog {
+		entries[len(entries)-1-i] = entry
+	}
+	return entries
+}
+
+func recordRequest(entry RequestLogEntry) {
+	reg.mu.Lock()
+	defer reg.mu.Unlock()
+
+	if len(reg.requestLog) == requestLogSize {
+		reg.requestLog = append(reg.requestLog[:0], reg.requestLog[1:]...)
+	}
+	reg.requestLog = append(reg.requestLog, entry)
+}
+
+// statusRecorder captures the status a handler sends. A handler that never
+// calls WriteHeader sends 200.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusRecorder) WriteHeader(status int) {
+	s.status = status
+	s.ResponseWriter.WriteHeader(status)
+}
+
 func handleMock(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+	w = recorder
+	matched := false
+	defer func() {
+		recordRequest(RequestLogEntry{
+			Time:     time.Now(),
+			Method:   r.Method,
+			Path:     r.URL.Path,
+			Status:   recorder.status,
+			Duration: time.Since(start),
+			Matched:  matched,
+		})
+	}()
+
 	reg.mu.RLock()
 	var matchedMock *Mock
 	for i := range reg.mocks {
@@ -94,6 +157,8 @@ func handleMock(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"error": "no matching mock found"}`)
 		return
 	}
+
+	matched = true
 
 	// Increment the request count
 	reg.mu.Lock()

@@ -172,6 +172,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		counts := server.GetAndResetRequestCounts()
+		m.requestLog = server.RecentRequests()
 
 		items := m.list.Items()
 		for i, it := range items {
@@ -228,6 +229,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.formStep = formStepPath
 				m.cursorVisible = true
 				return m, tea.Batch(m.spinner.Tick, cursorTick())
+			case "r":
+				if m.list.FilterState() == list.Filtering {
+					break // let the list write the "r" into the filter
+				}
+				m.showRequestLog = !m.showRequestLog
+				return m, nil
 			case "e":
 				if m.list.FilterState() == list.Filtering {
 					break // let the list write the "e" into the filter
