@@ -41,6 +41,10 @@ var (
 		key.WithKeys("d"),
 		key.WithHelp("d", "delete"),
 	)
+	requestLogKey = key.NewBinding(
+		key.WithKeys("r"),
+		key.WithHelp("r", "requests"),
+	)
 )
 
 type mode int
@@ -95,16 +99,18 @@ type model struct {
 	formStatus        string
 	formDelay         string
 	formJSONFile      string
-	formError         string   // why the current field was rejected; shown in formMode until the user edits it
-	cursorVisible     bool     // text cursor blink in formMode, toggled by cursorTick (update.go)
-	trafficElapsed    int      // seconds accumulated within the current bucket, shared: all mocks roll buckets at the same time
-	pendingMock       mockItem // mock already built by the wizard, waiting for provisioningMode to finish before it's inserted into the list
-	provisionPercent  float64  // UNclamped accumulator (unlike progress.Model.Percent()) so we can detect the overshoot that closes the animation
-	toggleLabel       string   // "Enabling..."/"Disabling...", the text togglingMode's popup shows
-	editing           bool     // the form (and the provisioning that follows it) is changing the mock at editIndex instead of adding one
-	editIndex         int      // index in the unfiltered list of the mock being edited
-	deleteIndex       int      // index in the unfiltered list of the mock confirmDeleteMode's popup asks about
-	deleteTitle       string   // title of that same mock, shown in the popup
+	formError         string                   // why the current field was rejected; shown in formMode until the user edits it
+	cursorVisible     bool                     // text cursor blink in formMode, toggled by cursorTick (update.go)
+	trafficElapsed    int                      // seconds accumulated within the current bucket, shared: all mocks roll buckets at the same time
+	pendingMock       mockItem                 // mock already built by the wizard, waiting for provisioningMode to finish before it's inserted into the list
+	provisionPercent  float64                  // UNclamped accumulator (unlike progress.Model.Percent()) so we can detect the overshoot that closes the animation
+	toggleLabel       string                   // "Enabling..."/"Disabling...", the text togglingMode's popup shows
+	showRequestLog    bool                     // the right panel shows the request log instead of the selected mock's details
+	requestLog        []server.RequestLogEntry // newest first, refreshed by trafficTick (update.go)
+	editing           bool                     // the form (and the provisioning that follows it) is changing the mock at editIndex instead of adding one
+	editIndex         int                      // index in the unfiltered list of the mock being edited
+	deleteIndex       int                      // index in the unfiltered list of the mock confirmDeleteMode's popup asks about
+	deleteTitle       string                   // title of that same mock, shown in the popup
 }
 
 func initialModel() (model, error) {

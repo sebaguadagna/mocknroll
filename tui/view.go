@@ -5,9 +5,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/sebaguadagna/mocknroll/server"
 )
 
 var (
@@ -169,10 +171,11 @@ func (m model) renderListView() string {
 	// shadeTextStyle: same hue as the "Details"/"Mocks loaded" shading,
 	// but as text color, without the background pill.
 	hintLine := shadeTextStyle.Render(fmt.Sprintf(
-		"%s: %s • %s: %s • %s: %s • filter: / • %s: %s • %s: %s",
+		"%s: %s • %s: %s • %s: %s • %s: %s • filter: / • %s: %s • %s: %s",
 		addMockKey.Help().Desc, addMockKey.Help().Key,
 		editMockKey.Help().Desc, editMockKey.Help().Key,
 		deleteMockKey.Help().Desc, deleteMockKey.Help().Key,
+		requestLogKey.Help().Desc, requestLogKey.Help().Key,
 		toggleEnabledKey.Help().Desc, toggleEnabledKey.Help().Key,
 		quitKey.Help().Desc, quitKey.Help().Key,
 	))
@@ -183,10 +186,21 @@ func (m model) renderListView() string {
 		Render(listBody)
 	left := leftPanelBorder.Render(leftContent)
 
-	// Right side: detail
+	// m.listWidth+2: total already-rendered width of the left panel
+	// (border included), to calculate how much is left available for the
+	// right one.
+	rightContentWidth := m.width - (m.listWidth + 2) - columnGap - 2
+	if rightContentWidth < 10 {
+		rightContentWidth = 10
+	}
+
+	// Right side: request log or detail
 	selected, ok := m.list.SelectedItem().(mockItem)
 	var detailView string
-	if ok {
+	if m.showRequestLog {
+		// -4/-2: panelPadding's columns and rows
+		detailView = renderRequestLog(m.requestLog, rightContentWidth-4, m.listHeight-2)
+	} else if ok {
 		method := m.formMethodIfEmpty(selected)
 		path := m.formPathIfEmpty(selected)
 		color := methodColor[method]
@@ -230,13 +244,6 @@ func (m model) renderListView() string {
 		detailView = "Select a mock to see details"
 	}
 
-	// m.listWidth+2: total already-rendered width of the left panel
-	// (border included), to calculate how much is left available for the
-	// right one.
-	rightContentWidth := m.width - (m.listWidth + 2) - columnGap - 2
-	if rightContentWidth < 10 {
-		rightContentWidth = 10
-	}
 	rightContent := panelPadding.
 		Width(rightContentWidth).MaxWidth(rightContentWidth).
 		Height(m.listHeight).MaxHeight(m.listHeight).
@@ -244,6 +251,79 @@ func (m model) renderListView() string {
 	right := rightPanelBorder.Render(rightContent)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", columnGap), right)
+}
+
+// renderRequestLog fits in height rows: the header, a blank line and as many
+// entries as there's room for.
+func renderRequestLog(entries []server.RequestLogEntry, width, height int) string {
+	header := headerStyle.Render("Requests")
+	if len(entries) == 0 {
+		return header + "\n\n" + stepStyle.Render("No requests yet")
+	}
+	rows := make([]string, 0, len(entries))
+	for _, entry := range entries[:min(len(entries), max(0, height-2))] {
+		rows = append(rows, requestLogRow(entry, width))
+	}
+	return header + "\n\n" + strings.Join(rows, "\n")
+}
+
+// requestLogRow always fits in one line of width columns. Only the path
+// shrinks, so the status and last column stay visible. Unmatched requests
+// answer right away, so "no mock" takes the place of their duration.
+func requestLogRow(entry server.RequestLogEntry, width int) string {
+	const methodWidth = 7
+	const lastColumnWidth = 7
+
+	method := fitText(sanitizeForTerminal(entry.Method), methodWidth)
+	prefix := fmt.Sprintf("%s %-*s ", entry.Time.Format("15:04:05"), methodWidth, method)
+	status := fmt.Sprintf("%3d", entry.Status)
+	lastColumn := "no mock"
+	if entry.Matched {
+		lastColumn = fmt.Sprintf("%dms", entry.Duration.Milliseconds())
+	}
+
+	suffixWidth := 1 + lipgloss.Width(status) + 1 + lastColumnWidth
+	pathWidth := max(8, width-lipgloss.Width(prefix)-suffixWidth)
+	path := fitText(sanitizeForTerminal(entry.Path), pathWidth)
+	path += strings.Repeat(" ", pathWidth-lipgloss.Width(path))
+
+	row := fmt.Sprintf("%s%s %s %*s", prefix, path, statusStyle(entry.Status).Render(status), lastColumnWidth, lastColumn)
+	return lipgloss.NewStyle().MaxWidth(width).Render(row)
+}
+
+// sanitizeForTerminal removes control characters: paths and methods come from
+// clients, and an escape sequence in one could alter the terminal.
+func sanitizeForTerminal(text string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, text)
+}
+
+func fitText(text string, width int) string {
+	if lipgloss.Width(text) <= width {
+		return text
+	}
+	runes := []rune(text)
+	runes = runes[:min(len(runes), width)]
+	for len(runes) > 0 && lipgloss.Width(string(runes)) > width-1 {
+		runes = runes[:len(runes)-1]
+	}
+	return string(runes) + "…"
+}
+
+func statusStyle(status int) lipgloss.Style {
+	switch {
+	case status >= 500:
+		return delayHighStyle
+	case status >= 400:
+		return delayMidStyle
+	case status >= 200 && status < 300:
+		return delayLowStyle
+	}
+	return lipgloss.NewStyle()
 }
 
 func (m model) formPathIfEmpty(item mockItem) string {
