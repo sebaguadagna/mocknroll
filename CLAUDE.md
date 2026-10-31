@@ -30,7 +30,7 @@ The `tui` package is split by Elm-architecture role:
 
 State machine (`m.currentMode`, defined in `model.go`):
 - `listMode` — browse the list of configured mocks (left pane) with detail view (right pane, `view.go`). `a`/`e` → `formMode`; `d` → `confirmDeleteMode`; `r` switches the right pane between details and the request log; `q`/`ctrl+c` → `confirmExitMode`.
-- `formMode` — multi-step form to add a new mock, one field per key press cycling through `formStepPath → formStepMethod → formStepStatus → formStepDelay → formStepJSONFile` (constants in `update.go`); `Enter` validates the field (`tui/validate.go`) and advances/submits, `Esc` cancels back to `listMode`. On submit, builds a `mockItem` and, after the provisioning animation, inserts it into `m.list` or replaces the mock at `m.editIndex` when `m.editing`.
+- `formMode` — multi-step form to add a new mock, one field per key press cycling through `formStepPath → formStepMethod → formStepStatus → formStepDelay → formStepFailureRate → formStepFailureStatus (skipped when the rate is 0) → formStepJSONFile` (constants in `update.go`); `Enter` validates the field (`tui/validate.go`) and advances/submits, `Esc` cancels back to `listMode`. On submit, builds a `mockItem` and, after the provisioning animation, inserts it into `m.list` or replaces the mock at `m.editIndex` when `m.editing`.
 - `confirmDeleteMode` — `y`/`Y` deletes the selected mock, `n`/`N`/`Esc` returns to `listMode`.
 - `confirmExitMode` — `y`/`Y` quits, `n`/`N`/`Esc` returns to `listMode`.
 

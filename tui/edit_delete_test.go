@@ -50,6 +50,10 @@ func currentFieldValue(m model) string {
 		return m.formStatus
 	case formStepDelay:
 		return m.formDelay
+	case formStepFailureRate:
+		return m.formFailureRate
+	case formStepFailureStatus:
+		return m.formFailureStatus
 	default:
 		return m.formJSONFile
 	}
@@ -58,7 +62,11 @@ func currentFieldValue(m model) string {
 func goToStep(t *testing.T, m model, step int) model {
 	t.Helper()
 	for m.formStep < step {
+		before := m.formStep
 		m = pressEnter(t, m)
+		if m.formStep == before {
+			t.Fatalf("form stuck on step %d: %s", before, m.formError)
+		}
 	}
 	return m
 }

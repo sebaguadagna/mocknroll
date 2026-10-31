@@ -116,6 +116,7 @@ func TestFormSubmitNormalizesAndInsertsAfterProvisioning(t *testing.T) {
 	m = pressEnter(t, m)
 	m = pressEnter(t, m) // status: default
 	m = pressEnter(t, m) // delay: default
+	m = pressEnter(t, m) // failure rate: default, skips failure status
 	m = pressEnter(t, m) // json file: none
 
 	if m.currentMode != provisioningMode {

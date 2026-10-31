@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
@@ -18,16 +19,21 @@ type Mock struct {
 	DelayMs  int
 	JSONFile string
 	Enabled  bool
+
+	DelayMaxMs    int // above DelayMs, requests wait a random time between the two
+	FailureRate   int // percentage of requests that answer FailureStatus
+	FailureStatus int
 }
 
 // RequestLogEntry describes one completed request.
 type RequestLogEntry struct {
-	Time     time.Time
-	Method   string
-	Path     string
-	Status   int
-	Duration time.Duration
-	Matched  bool // false when no enabled mock matched
+	Time      time.Time
+	Method    string
+	Path      string
+	Status    int
+	Duration  time.Duration
+	Matched   bool // false when no enabled mock matched
+	Simulated bool // true when the failure was simulated
 }
 
 // requestLogSize bounds the memory the log can use under any request volume.
@@ -129,14 +135,16 @@ func handleMock(w http.ResponseWriter, r *http.Request) {
 	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 	w = recorder
 	matched := false
+	simulated := false
 	defer func() {
 		recordRequest(RequestLogEntry{
-			Time:     time.Now(),
-			Method:   r.Method,
-			Path:     r.URL.Path,
-			Status:   recorder.status,
-			Duration: time.Since(start),
-			Matched:  matched,
+			Time:      time.Now(),
+			Method:    r.Method,
+			Path:      r.URL.Path,
+			Status:    recorder.status,
+			Duration:  time.Since(start),
+			Matched:   matched,
+			Simulated: simulated,
 		})
 	}()
 
@@ -167,8 +175,26 @@ func handleMock(w http.ResponseWriter, r *http.Request) {
 	reg.mu.Unlock()
 
 	// Simulate latency if configured
-	if matchedMock.DelayMs > 0 {
-		time.Sleep(time.Duration(matchedMock.DelayMs) * time.Millisecond)
+	delayMs := matchedMock.DelayMs
+	if matchedMock.DelayMaxMs > matchedMock.DelayMs {
+		delayMs += rand.IntN(matchedMock.DelayMaxMs - matchedMock.DelayMs + 1)
+	}
+	if delayMs > 0 {
+		time.Sleep(time.Duration(delayMs) * time.Millisecond)
+	}
+
+	// Simulate a failure if it's this request's turn. Rates at or below 0
+	// never pass this check, and rates at or above 100 always do.
+	if rand.IntN(100) < matchedMock.FailureRate {
+		simulated = true
+		status := matchedMock.FailureStatus
+		if status < 400 || status > 599 { // mocks.json can be hand-edited
+			status = http.StatusInternalServerError
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		io.WriteString(w, `{"error": "simulated failure"}`)
+		return
 	}
 
 	// Read and serve the JSON file
