@@ -1,12 +1,14 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -130,6 +132,68 @@ func (s *statusRecorder) WriteHeader(status int) {
 	s.ResponseWriter.WriteHeader(status)
 }
 
+// ParamName returns the name of a "{name}" path segment. A name starts with a
+// letter or underscore and contains only letters, digits and underscores.
+func ParamName(segment string) (string, bool) {
+	if len(segment) < 3 || segment[0] != '{' || segment[len(segment)-1] != '}' {
+		return "", false
+	}
+	name := segment[1 : len(segment)-1]
+	for i, c := range name {
+		isLetter := c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+		isDigit := c >= '0' && c <= '9'
+		if !isLetter && (!isDigit || i == 0) {
+			return "", false
+		}
+	}
+	return name, true
+}
+
+// matchPath compares a request path to a mock's path, segment by segment. It
+// returns the captured parameters and how many segments matched literally.
+func matchPath(pattern, path string) (map[string]string, int, bool) {
+	patternSegments := strings.Split(pattern, "/")
+	pathSegments := strings.Split(path, "/")
+	if len(patternSegments) != len(pathSegments) {
+		return nil, 0, false
+	}
+
+	var params map[string]string
+	literals := 0
+	for i, segment := range patternSegments {
+		if name, ok := ParamName(segment); ok {
+			if pathSegments[i] == "" {
+				return nil, 0, false
+			}
+			if params == nil {
+				params = make(map[string]string)
+			}
+			params[name] = pathSegments[i]
+			continue
+		}
+		if segment != pathSegments[i] {
+			return nil, 0, false
+		}
+		literals++
+	}
+	return params, literals, true
+}
+
+// substituteParams replaces each "{name}" in a JSON body with its captured
+// value, escaped to stay valid inside a JSON string. A replacer makes a single
+// pass, so text inside a captured value is never substituted again.
+func substituteParams(body []byte, params map[string]string) []byte {
+	if len(params) == 0 {
+		return body
+	}
+	pairs := make([]string, 0, len(params)*2)
+	for name, value := range params {
+		escaped, _ := json.Marshal(value) // marshaling a string can't fail
+		pairs = append(pairs, "{"+name+"}", string(escaped[1:len(escaped)-1]))
+	}
+	return []byte(strings.NewReplacer(pairs...).Replace(string(body)))
+}
+
 func handleMock(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
@@ -150,11 +214,18 @@ func handleMock(w http.ResponseWriter, r *http.Request) {
 
 	reg.mu.RLock()
 	var matchedMock *Mock
+	var params map[string]string
+	mostLiterals := -1
 	for i := range reg.mocks {
 		m := &reg.mocks[i]
-		if m.Enabled && r.Method == m.Method && r.URL.Path == m.Path {
+		if !m.Enabled || r.Method != m.Method {
+			continue
+		}
+		// Only strictly more literals replace a match: on a tie, the first wins.
+		if mockParams, literals, ok := matchPath(m.Path, r.URL.Path); ok && literals > mostLiterals {
 			matchedMock = m
-			break
+			params = mockParams
+			mostLiterals = literals
 		}
 	}
 	reg.mu.RUnlock()
@@ -208,6 +279,7 @@ func handleMock(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, `{"error": "failed to read json file: %v"}`, err)
 			return
 		}
+		body = substituteParams(body, params)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
