@@ -51,7 +51,7 @@
 
 ## Status
 
-Mocks are served over HTTP on port `8080`, respecting the configured status, delay, and response body, and persisted to `mocks.json` in the working directory.
+Mocks are served over HTTP on port `8080` by default (see `--port` below), respecting the configured status, delay, and response body, and persisted to `mocks.json` in the working directory.
 
 ## Installation
 
@@ -69,6 +69,13 @@ Requires Go 1.24+ (see `go.mod`).
 
 ```sh
 make run
+```
+
+The server listens on port `8080`. To use another one, from 1 to 65535, pass `--port`:
+
+```sh
+bin/mocknroll --port 9000
+go run . --port 9000
 ```
 
 | Key         | Action                              |
