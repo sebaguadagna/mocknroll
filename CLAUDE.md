@@ -34,6 +34,6 @@ State machine (`m.currentMode`, defined in `model.go`):
 - `confirmDeleteMode` — `y`/`Y` deletes the selected mock, `n`/`N`/`Esc` returns to `listMode`.
 - `confirmExitMode` — `y`/`Y` quits, `n`/`N`/`Esc` returns to `listMode`.
 
-`server/server.go` contains the mock HTTP server that runs in a background goroutine on port `:8080`, serving routes dynamically. It tracks real traffic statistics and a bounded log of recent requests (`RecentRequests`, pulled by the TUI's traffic tick), and maps to the configurations synchronized from the TUI. Mock configurations are persisted locally in `mocks.json` in the root of the project.
+`server/server.go` contains the mock HTTP server that runs in a background goroutine on port `:8080`, serving routes dynamically, including `{name}` path parameters (the mock with the most literal segments wins; captured values are substituted into the JSON body). It tracks real traffic statistics and a bounded log of recent requests (`RecentRequests`, pulled by the TUI's traffic tick), and maps to the configurations synchronized from the TUI. Mock configurations are persisted locally in `mocks.json` in the root of the project.
 
 `modelview` (plain text, no extension, in Spanish) is an existing ASCII diagram of the Start()→View() flow — useful as a quick visual reference for the mode-based rendering logic.

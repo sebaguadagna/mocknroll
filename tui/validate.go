@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/sebaguadagna/mocknroll/server"
 )
 
 var validMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
@@ -24,7 +26,41 @@ func normalizePath(path string) (string, error) {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
+	if err := checkPathParams(path); err != nil {
+		return "", err
+	}
 	return path, nil
+}
+
+// checkPathParams only allows braces as whole "{name}" segments, each name once.
+func checkPathParams(path string) error {
+	seen := make(map[string]bool)
+	for _, segment := range strings.Split(path, "/") {
+		if !strings.ContainsAny(segment, "{}") {
+			continue
+		}
+		name, ok := server.ParamName(segment)
+		if !ok {
+			return fmt.Errorf("invalid segment %s: a parameter is a whole segment, like {id}", segment)
+		}
+		if seen[name] {
+			return fmt.Errorf("parameter {%s} is repeated", name)
+		}
+		seen[name] = true
+	}
+	return nil
+}
+
+// routeKey blanks parameter names, because /a/{x} and /a/{y} match the same
+// requests. It takes a whole title, so the method is compared too.
+func routeKey(title string) string {
+	segments := strings.Split(title, "/")
+	for i, segment := range segments {
+		if _, ok := server.ParamName(segment); ok {
+			segments[i] = "{}"
+		}
+	}
+	return strings.Join(segments, "/")
 }
 
 func normalizeMethod(method string) (string, error) {
@@ -161,7 +197,7 @@ func (m model) hasMock(title string) bool {
 		if m.editing && i == m.editIndex {
 			continue
 		}
-		if mi, ok := it.(mockItem); ok && mi.title == title {
+		if mi, ok := it.(mockItem); ok && routeKey(mi.title) == routeKey(title) {
 			return true
 		}
 	}

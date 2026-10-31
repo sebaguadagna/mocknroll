@@ -43,6 +43,7 @@
 - **Edit or delete a mock** without touching `mocks.json` by hand.
 - **Live request log** (`r`) — method, path, status, and duration of recent requests, including those no mock matched.
 - **Simulate an unreliable backend** — random latency within a range and a per-mock failure rate.
+- **Path parameters** — one mock for `/users/{id}`, with the captured value available in the response.
 - **Toggle a mock on/off** (`t`) without deleting it.
 - **Delay severity at a glance** — the configured delay is color-coded: green (≤ 30ms), orange (31–150ms), red (> 150ms).
 - **Response preview** — see the first lines of the JSON file a mock will respond with, right in the detail panel.
@@ -89,6 +90,14 @@ While filling out the add or edit form: `Enter` advances to the next field (or s
 The form's delay field takes a fixed value (`200`) or a range (`100-500`); with a range, each request waits a random time within it.
 
 The failure rate is the percentage of requests that fail, decided independently for each one. A failing request still waits the configured delay, then answers the failure status (400–599, `500` by default) with `{"error": "simulated failure"}`. Those requests are marked `fail` in the request log. A rate of `0` turns this off.
+
+### Path parameters
+
+A path segment written as `{name}` matches any single segment, so `GET /users/{id}` answers `/users/42` and `/users/abc`, but not `/users` or `/users/42/orders`. A parameter must be a whole segment, so `/files/{id}.json` isn't valid.
+
+When several mocks match a request, the one with the most literal segments answers, whatever their order in the list: `GET /users/me` wins over `GET /users/{id}`. On a tie, the first in the list answers.
+
+In a mock with parameters, each `{name}` in the response file is replaced with the value from the request. With a file holding `{"id": "{id}"}`, `/users/42` answers `{"id": "42"}`. Values are JSON-escaped, and the file itself isn't changed.
 
 ## Development
 
