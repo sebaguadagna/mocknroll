@@ -11,9 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `make fmt` / `make vet` — `go fmt ./...` / `go vet ./...`
 - `make clean` — remove `bin/`
 
-CI (`.github/workflows/ci.yml`) runs `go build ./...` and `go test ./...` on push/PR to `main`, plus a `docker` job that builds the image and requests a mock from a running container.
-
-Note: `package.json` / `package-lock.json` at the repo root are stray/empty and unrelated to this Go module — there is no JS toolchain here.
+CI (`.github/workflows/ci.yml`) runs `go build ./...` and `go test ./...` on push/PR to `main`, plus `gofmt`, `go vet`, race tests, `govulncheck`, a `lint` job (`golangci-lint`) and a `docker` job that builds the image and requests a mock from a running container. Planned work lives in `ROADMAP.md`.
 
 ## Workflow
 
