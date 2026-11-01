@@ -145,7 +145,7 @@ func takeConn(w http.ResponseWriter) net.Conn {
 func resetConnection(w http.ResponseWriter) {
 	conn := takeConn(w)
 	if tcp, ok := conn.(*net.TCPConn); ok {
-		tcp.SetLinger(0)
+		_ = tcp.SetLinger(0) // without it, the close is clean instead of a reset
 	}
 	conn.Close()
 }
@@ -156,7 +156,7 @@ func resetConnection(w http.ResponseWriter) {
 func hangConnection(w http.ResponseWriter) {
 	conn := takeConn(w)
 	defer conn.Close()
-	io.Copy(io.Discard, conn)
+	_, _ = io.Copy(io.Discard, conn) // any read error also means the client is gone
 }
 
 // statusRecorder captures the status a handler sends. A handler that never
