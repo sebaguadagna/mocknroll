@@ -66,6 +66,7 @@ type mockItem struct {
 	status         string
 	delay          string
 	failureRate    string
+	failureType    string
 	failureStatus  string
 	jsonFile       string
 	enabled        bool
@@ -103,6 +104,7 @@ type model struct {
 	formStatus        string
 	formDelay         string
 	formFailureRate   string
+	formFailureType   string
 	formFailureStatus string
 	formJSONFile      string
 	formError         string                   // why the current field was rejected; shown in formMode until the user edits it
@@ -197,6 +199,7 @@ type mockItemPersist struct {
 	Status        string `json:"status"`
 	Delay         string `json:"delay"`
 	FailureRate   string `json:"failure_rate,omitempty"`
+	FailureType   string `json:"failure_type,omitempty"`
 	FailureStatus string `json:"failure_status,omitempty"`
 	JSONFile      string `json:"json_file"`
 	Enabled       bool   `json:"enabled"`
@@ -209,6 +212,7 @@ func (mi mockItem) toPersist() mockItemPersist {
 		Status:        mi.status,
 		Delay:         mi.delay,
 		FailureRate:   mi.failureRate,
+		FailureType:   mi.failureType,
 		FailureStatus: mi.failureStatus,
 		JSONFile:      mi.jsonFile,
 		Enabled:       mi.enabled,
@@ -222,6 +226,7 @@ func (p mockItemPersist) toItem() mockItem {
 		status:         p.Status,
 		delay:          p.Delay,
 		failureRate:    p.FailureRate,
+		failureType:    p.FailureType,
 		failureStatus:  p.FailureStatus,
 		jsonFile:       p.JSONFile,
 		enabled:        p.Enabled,
@@ -336,6 +341,7 @@ func (mi mockItem) toServerMock() server.Mock {
 		JSONFile:      mi.jsonFile,
 		Enabled:       mi.enabled,
 		FailureRate:   failureRate,
+		FailureType:   mi.failureType,
 		FailureStatus: failureStatus,
 	}
 }

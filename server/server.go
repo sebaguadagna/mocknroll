@@ -25,7 +25,15 @@ type Mock struct {
 	DelayMaxMs    int // above DelayMs, requests wait a random time between the two
 	FailureRate   int // percentage of requests that answer FailureStatus
 	FailureStatus int
+	FailureType   string // how a failing request fails; any unknown value means FailureHTTP
 }
+
+// Ways a simulated failure can reach the client.
+const (
+	FailureHTTP  = "http"  // answers the failure status
+	FailureReset = "reset" // aborts the TCP connection, with no response
+	FailureHang  = "hang"  // never responds, and waits for the client to leave
+)
 
 // RequestLogEntry describes one completed request.
 type RequestLogEntry struct {
@@ -36,6 +44,8 @@ type RequestLogEntry struct {
 	Duration  time.Duration
 	Matched   bool // false when no enabled mock matched
 	Simulated bool // true when the failure was simulated
+
+	FailureType string // FailureReset or FailureHang, which send no response; Status is 0 then
 }
 
 // requestLogSize bounds the memory the log can use under any request volume.
@@ -120,6 +130,35 @@ func recordRequest(entry RequestLogEntry) {
 	reg.requestLog = append(reg.requestLog, entry)
 }
 
+// takeConn takes the connection from the HTTP server. If it can't, it aborts
+// the handler, which also closes the connection without a response.
+func takeConn(w http.ResponseWriter) net.Conn {
+	conn, _, err := http.NewResponseController(w).Hijack()
+	if err != nil {
+		panic(http.ErrAbortHandler)
+	}
+	return conn
+}
+
+// resetConnection closes the connection with an RST instead of a clean FIN,
+// so the client sees "connection reset".
+func resetConnection(w http.ResponseWriter) {
+	conn := takeConn(w)
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		tcp.SetLinger(0)
+	}
+	conn.Close()
+}
+
+// hangConnection sends nothing and returns once the client closes. It reads
+// the connection itself because a request's context may not notice a client
+// leaving while the body is unread, and reading r.Body may send "100 Continue".
+func hangConnection(w http.ResponseWriter) {
+	conn := takeConn(w)
+	defer conn.Close()
+	io.Copy(io.Discard, conn)
+}
+
 // statusRecorder captures the status a handler sends. A handler that never
 // calls WriteHeader sends 200.
 type statusRecorder struct {
@@ -196,10 +235,12 @@ func substituteParams(body []byte, params map[string]string) []byte {
 
 func handleMock(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	conn := w // statusRecorder doesn't expose Hijack
 	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 	w = recorder
 	matched := false
 	simulated := false
+	failureType := ""
 	defer func() {
 		recordRequest(RequestLogEntry{
 			Time:      time.Now(),
@@ -209,6 +250,8 @@ func handleMock(w http.ResponseWriter, r *http.Request) {
 			Duration:  time.Since(start),
 			Matched:   matched,
 			Simulated: simulated,
+
+			FailureType: failureType,
 		})
 	}()
 
@@ -258,6 +301,16 @@ func handleMock(w http.ResponseWriter, r *http.Request) {
 	// never pass this check, and rates at or above 100 always do.
 	if rand.IntN(100) < matchedMock.FailureRate {
 		simulated = true
+		if matchedMock.FailureType == FailureReset || matchedMock.FailureType == FailureHang {
+			failureType = matchedMock.FailureType
+			recorder.status = 0
+			if failureType == FailureReset {
+				resetConnection(conn)
+			} else {
+				hangConnection(conn)
+			}
+			return
+		}
 		status := matchedMock.FailureStatus
 		if status < 400 || status > 599 { // mocks.json can be hand-edited
 			status = http.StatusInternalServerError

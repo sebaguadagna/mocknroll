@@ -85,6 +85,7 @@ func createFailingMock(t *testing.T, m model) model {
 	m = pressEnter(t, m)
 	m = typeText(t, m, "20")
 	m = pressEnter(t, m)
+	m = pressEnter(t, m) // failure type: empty means http
 	if m.formStep != formStepFailureStatus {
 		t.Fatalf("expected failure status step, got %d: %s", m.formStep, m.formError)
 	}

@@ -44,6 +44,8 @@ func currentFieldValue(m model) string {
 	switch m.formStep {
 	case formStepPath:
 		return m.formPath
+	case formStepFailureType:
+		return m.formFailureType
 	case formStepMethod:
 		return m.formMethod
 	case formStepStatus:
