@@ -199,3 +199,17 @@ func TestMocksWithoutFailureTypeKeepWorking(t *testing.T) {
 		t.Errorf("unexpected line: %q", line)
 	}
 }
+
+func TestOnlyFailureTypeStepExplainsTheTypes(t *testing.T) {
+	m := startFailingForm(t, newEditTestModel(t))
+	for _, want := range []string{"answers an error status", "drops the connection", "never answers"} {
+		if view := m.renderView(); !strings.Contains(view, want) {
+			t.Errorf("the step doesn't explain %q:\n%s", want, view)
+		}
+	}
+
+	m = pressEnter(t, m)
+	if view := m.renderView(); strings.Contains(view, "drops the connection") {
+		t.Errorf("the next step still shows the help:\n%s", view)
+	}
+}

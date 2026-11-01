@@ -78,6 +78,11 @@ var (
 	}
 )
 
+// failureTypeHelp is shown on the form's failure type step.
+const failureTypeHelp = `http   answers an error status (default)
+reset  drops the connection, with no response
+hang   never answers, until the client gives up`
+
 func (m model) View() tea.View {
 	v := tea.NewView(m.renderView())
 	v.AltScreen = true
@@ -129,15 +134,20 @@ func (m model) renderView() string {
 		if m.editing {
 			header = "Editing mock..."
 		}
+		help := ""
+		if m.formStep == formStepFailureType {
+			help = stepStyle.Render(failureTypeHelp) + "\n\n"
+		}
 		percent := float64(m.formStep+1) / float64(totalFormSteps)
 		content := fmt.Sprintf(
-			"%s %s  %s\n\n%s\n\n%s: %s\n%s\n(Type and press Enter to continue)\n[Esc: cancel]",
+			"%s %s  %s\n\n%s\n\n%s: %s\n%s\n%s(Type and press Enter to continue)\n[Esc: cancel]",
 			m.spinner.View(),
 			formHeaderStyle.Render(header),
 			stepStyle.Render(fmt.Sprintf("Step %d/%d", m.formStep+1, totalFormSteps)),
 			m.progress.ViewAs(percent),
 			label, fieldWithCursor(value, m.cursorVisible),
 			formErrorStyle.Render(m.formError),
+			help,
 		)
 		return borderStyle.Render(content)
 	case provisioningMode:
