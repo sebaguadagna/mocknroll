@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/sebaguadagna/mocknroll/actions/workflows/ci.yml"><img src="https://github.com/sebaguadagna/mocknroll/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="go.mod"><img src="https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25"></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
@@ -32,7 +32,7 @@ Your app works fine against a healthy backend. But what does it do when a respon
 
 ## Quick start
 
-With Go 1.25+:
+With Go 1.26+:
 
 ```sh
 git clone https://github.com/sebaguadagna/mocknroll.git
