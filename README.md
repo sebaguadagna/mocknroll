@@ -136,7 +136,7 @@ See [`CLAUDE.md`](CLAUDE.md) for a closer look at the project's architecture.
 
 ## Contributing
 
-Issues and pull requests are welcome. This is a small, actively evolving project, so it's a good time to shape where it goes.
+Issues and pull requests are welcome. This is a small, actively evolving project, so it's a good time to shape where it goes. See the [roadmap](ROADMAP.md) for what's planned.
 
 ## License
 
