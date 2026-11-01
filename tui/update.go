@@ -17,6 +17,7 @@ const (
 	formStepStatus
 	formStepDelay
 	formStepFailureRate
+	formStepFailureType
 	formStepFailureStatus
 	formStepJSONFile
 	totalFormSteps
@@ -248,6 +249,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.formStatus = selected.status
 					m.formDelay = selected.delay
 					m.formFailureRate = selected.failureRate
+					m.formFailureType = selected.failureType
 					m.formFailureStatus = selected.failureStatus
 					m.formJSONFile = selected.jsonFile
 					m.currentMode = formMode
@@ -334,8 +336,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case formStepDelay:
 					m.formStep = formStepFailureRate
 				case formStepFailureRate:
-					m.formStep = formStepFailureStatus
+					m.formStep = formStepFailureType
 					if m.formFailureRate == "0" {
+						m.formFailureType, m.formFailureStatus = "", ""
+						m.formStep = formStepJSONFile
+					}
+				case formStepFailureType:
+					m.formStep = formStepFailureStatus
+					if m.formFailureType != server.FailureHTTP { // a network failure has no status
 						m.formFailureStatus = ""
 						m.formStep = formStepJSONFile
 					}
@@ -351,6 +359,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						status:         m.formStatus,
 						delay:          m.formDelay,
 						failureRate:    m.formFailureRate,
+						failureType:    m.formFailureType,
 						failureStatus:  m.formFailureStatus,
 						jsonFile:       m.formJSONFile,
 						enabled:        true,
@@ -396,6 +405,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if len(m.formFailureRate) > 0 {
 						m.formFailureRate = m.formFailureRate[:len(m.formFailureRate)-1]
 					}
+				case formStepFailureType:
+					if len(m.formFailureType) > 0 {
+						m.formFailureType = m.formFailureType[:len(m.formFailureType)-1]
+					}
 				case formStepFailureStatus:
 					if len(m.formFailureStatus) > 0 {
 						m.formFailureStatus = m.formFailureStatus[:len(m.formFailureStatus)-1]
@@ -428,6 +441,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.formDelay += msg.Text
 				case formStepFailureRate:
 					m.formFailureRate += msg.Text
+				case formStepFailureType:
+					m.formFailureType += msg.Text
 				case formStepFailureStatus:
 					m.formFailureStatus += msg.Text
 				case formStepJSONFile:
@@ -446,7 +461,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) resetForm() {
 	m.formPath, m.formMethod, m.formStatus, m.formDelay, m.formJSONFile = "", "", "", "", ""
-	m.formFailureRate, m.formFailureStatus = "", ""
+	m.formFailureRate, m.formFailureType, m.formFailureStatus = "", "", ""
 	m.formStep = formStepPath
 	m.formError = ""
 }

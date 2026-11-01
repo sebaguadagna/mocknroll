@@ -42,7 +42,7 @@
 - **Add a mock** through a guided, step-by-step form (path → method → status → delay → response file) that validates each field as you go.
 - **Edit or delete a mock** without touching `mocks.json` by hand.
 - **Live request log** (`r`) — method, path, status, and duration of recent requests, including those no mock matched.
-- **Simulate an unreliable backend** — random latency within a range and a per-mock failure rate.
+- **Simulate an unreliable backend** — random latency within a range and a per-mock failure rate, failing with an HTTP status, a dropped connection, or a request that never answers.
 - **Path parameters** — one mock for `/users/{id}`, with the captured value available in the response.
 - **Toggle a mock on/off** (`t`) without deleting it.
 - **Delay severity at a glance** — the configured delay is color-coded: green (≤ 30ms), orange (31–150ms), red (> 150ms).
@@ -121,7 +121,17 @@ While filling out the add or edit form: `Enter` advances to the next field (or s
 
 The form's delay field takes a fixed value (`200`) or a range (`100-500`); with a range, each request waits a random time within it.
 
-The failure rate is the percentage of requests that fail, decided independently for each one. A failing request still waits the configured delay, then answers the failure status (400–599, `500` by default) with `{"error": "simulated failure"}`. Those requests are marked `fail` in the request log. A rate of `0` turns this off.
+The failure rate is the percentage of requests that fail, decided independently for each one. A rate of `0` turns this off. A failing request still waits the configured delay, then fails according to the mock's failure type:
+
+| Type | What happens | What the client sees | In the request log |
+|---|---|---|---|
+| `http` (default) | Answers the failure status (400–599, `500` by default) with `{"error": "simulated failure"}` | An HTTP error | The status, marked `fail` |
+| `reset` | Aborts the TCP connection without responding | `connection reset` | `---`, marked `reset` |
+| `hang` | Accepts the request and never responds | Nothing, until its own timeout | `---`, marked `hang`, once the client disconnects |
+
+A client with no timeout waits on a `hang` until it's stopped, which is the bug this type helps you find.
+
+With Docker Desktop, a published port turns a `reset` into a clean close, so a client on the host sees an empty reply instead of `connection reset`. It's still a connection failure with no response, but a client in the container's network, or running mocknroll outside Docker, sees the real reset.
 
 ### Path parameters
 

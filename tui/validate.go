@@ -126,6 +126,18 @@ func normalizeFailureRate(rate string) (string, error) {
 	return strconv.Itoa(percent), nil
 }
 
+// normalizeFailureType accepts an empty value, which means an HTTP failure.
+func normalizeFailureType(failureType string) (string, error) {
+	failureType = strings.ToLower(strings.TrimSpace(failureType))
+	switch failureType {
+	case "":
+		return server.FailureHTTP, nil
+	case server.FailureHTTP, server.FailureReset, server.FailureHang:
+		return failureType, nil
+	}
+	return "", errors.New("failure type must be http, reset or hang")
+}
+
 func normalizeFailureStatus(status string) (string, error) {
 	status = strings.TrimSpace(status)
 	if status == "" {
@@ -173,6 +185,8 @@ func (m *model) commitFormStep() error {
 		m.formDelay, err = keepOnError(m.formDelay, normalizeDelay)
 	case formStepFailureRate:
 		m.formFailureRate, err = keepOnError(m.formFailureRate, normalizeFailureRate)
+	case formStepFailureType:
+		m.formFailureType, err = keepOnError(m.formFailureType, normalizeFailureType)
 	case formStepFailureStatus:
 		m.formFailureStatus, err = keepOnError(m.formFailureStatus, normalizeFailureStatus)
 	case formStepJSONFile:

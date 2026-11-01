@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -114,6 +115,9 @@ func (m model) renderView() string {
 		case formStepFailureRate:
 			label = "Failure rate (%)"
 			value = m.formFailureRate
+		case formStepFailureType:
+			label = "Failure type (http, reset, hang)"
+			value = m.formFailureType
 		case formStepFailureStatus:
 			label = "Failure status"
 			value = m.formFailureStatus
@@ -298,13 +302,19 @@ func requestLogRow(entry server.RequestLogEntry, width int) string {
 	if entry.Simulated {
 		failSuffix = " fail"
 	}
+	style := statusStyle(entry.Status)
+	if entry.FailureType != "" { // no response was sent, so there's no status to show
+		status = "---"
+		style = statusStyle(http.StatusInternalServerError)
+		failSuffix = " " + entry.FailureType
+	}
 
 	suffixWidth := 1 + lipgloss.Width(status) + 1 + lastColumnWidth + lipgloss.Width(failSuffix)
 	pathWidth := max(8, width-lipgloss.Width(prefix)-suffixWidth)
 	path := fitText(sanitizeForTerminal(entry.Path), pathWidth)
 	path += strings.Repeat(" ", pathWidth-lipgloss.Width(path))
 
-	row := fmt.Sprintf("%s%s %s %*s%s", prefix, path, statusStyle(entry.Status).Render(status), lastColumnWidth, lastColumn, failSuffix)
+	row := fmt.Sprintf("%s%s %s %*s%s", prefix, path, style.Render(status), lastColumnWidth, lastColumn, failSuffix)
 	return lipgloss.NewStyle().MaxWidth(width).Render(row)
 }
 
@@ -370,6 +380,9 @@ func failureLine(item mockItem) string {
 	rate, _ := strconv.Atoi(item.failureRate)
 	if rate <= 0 {
 		return ""
+	}
+	if item.failureType == server.FailureReset || item.failureType == server.FailureHang {
+		return fmt.Sprintf("Failures:   %d%% with %s\n", rate, item.failureType)
 	}
 	status := item.failureStatus
 	if status == "" {
