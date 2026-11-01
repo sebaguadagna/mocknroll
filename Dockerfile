@@ -1,4 +1,4 @@
-FROM golang:1.25.0-alpine3.22 AS build
+FROM golang:1.26.4-alpine3.22 AS build
 WORKDIR /src
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /mocknroll . && mkdir /data
